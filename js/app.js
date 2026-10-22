@@ -353,13 +353,13 @@
         '<form id="form-inscripcion" method="post" action="#/"><input type="hidden" name="eventoId" value="' + escapar(evento.id) + '">' +
         '<div class="campo" style="margin-top:12px"><span>Nombres</span><input name="nombres" aria-label="Nombres" required maxlength="80" autocomplete="given-name"></div>' +
         '<div class="campo" style="margin-top:10px"><span>Apellidos</span><input name="apellidos" aria-label="Apellidos" required maxlength="80" autocomplete="family-name"></div>' +
-        '<div class="campo" style="margin-top:10px"><span>DNI</span><input name="dni" aria-label="DNI" required inputmode="numeric" maxlength="12" autocomplete="off"></div>' +
-        '<div class="campo" style="margin-top:10px"><span>Correo</span><input name="correo" aria-label="Correo" type="email" required maxlength="120" autocomplete="email"></div>' +
+        '<div class="campo" style="margin-top:10px"><span>DNI</span><input name="dni" aria-label="DNI" required inputmode="numeric" maxlength="8" pattern="[0-9]{8}" autocomplete="off" placeholder="8 números"></div>' +
+        '<div class="campo" style="margin-top:10px"><span>Correo</span><input name="correo" aria-label="Correo" type="email" required maxlength="120" autocomplete="email" placeholder="tunombre@correo.com"><p class="nota">Usa un correo real. Ahí llegará tu certificado.</p></div>' +
         '<div class="campo" style="margin-top:10px"><span>Categoría</span><div class="opciones">' +
         '<label class="opcion"><input type="radio" name="categoria" value="profesional"><span>Profesional<small>' + escapar(precioVisible(evento.precioProfesional)) + "</small></span></label>" +
         '<label class="opcion"><input type="radio" name="categoria" value="estudiante"><span>Estudiante<small>' + escapar(precioVisible(evento.precioEstudiante)) + "</small></span></label>" +
         "</div></div>" +
-        '<div class="campo" style="margin-top:10px"><span>WhatsApp</span><input name="whatsapp" aria-label="WhatsApp" required inputmode="tel" maxlength="20" placeholder="51987654321" autocomplete="tel"></div>' +
+        '<div class="campo" style="margin-top:10px"><span>WhatsApp</span><input name="whatsapp" aria-label="WhatsApp" required inputmode="numeric" maxlength="9" pattern="[0-9]{9}" placeholder="987654321" autocomplete="tel"></div>' +
         '<button class="btn btn-primario" style="margin-top:14px;width:100%" type="submit">Enviar inscripción</button></form>';
     }
     ficha += "</div></div></article>";
@@ -470,7 +470,9 @@
       var pago = item.pagado
         ? '<span class="pill pill-ok">Pagó</span>'
         : '<span class="pill pill-aviso">Pendiente</span>';
-      return "<tr><td data-label=\"Folio\">" + escapar(item.id) + "</td><td data-label=\"Nombre\">" + escapar(item.nombres + " " + item.apellidos) + "</td><td data-label=\"DNI\">" + escapar(item.dni) + "</td><td data-label=\"Correo\">" + escapar(item.correo) + "</td><td data-label=\"Categoría\">" + (item.categoria === "estudiante" ? "Estudiante" : "Profesional") + "</td><td data-label=\"WhatsApp\">" + escapar(item.whatsapp) + ' · <a href="https://wa.me/' + escapar(item.whatsapp) + '" target="_blank" rel="noopener noreferrer">Escribir</a></td><td data-label=\"Pago\">' + pago + '</td><td data-label="Acciones"><button type="button" class="btn btn-secundario" data-accion="pagado" data-id="' + escapar(item.id) + '" data-pagado="' + (item.pagado ? "1" : "0") + '">' + (item.pagado ? "Marcar pendiente" : "Marcar pagado") + '</button> <button type="button" class="btn btn-peligro" data-accion="anular" data-id="' + escapar(item.id) + '">Anular</button></td></tr>';
+      var whatsapp = String(item.whatsapp || "");
+      var enlaceWhatsapp = whatsapp.length === 9 ? "51" + whatsapp : whatsapp;
+      return "<tr><td data-label=\"Folio\">" + escapar(item.id) + "</td><td data-label=\"Nombre\">" + escapar(item.nombres + " " + item.apellidos) + "</td><td data-label=\"DNI\">" + escapar(item.dni) + "</td><td data-label=\"Correo\">" + escapar(item.correo) + "</td><td data-label=\"Categoría\">" + (item.categoria === "estudiante" ? "Estudiante" : "Profesional") + "</td><td data-label=\"WhatsApp\">" + escapar(item.whatsapp) + ' · <a href="https://wa.me/' + escapar(enlaceWhatsapp) + '" target="_blank" rel="noopener noreferrer">Escribir</a></td><td data-label=\"Pago\">' + pago + '</td><td data-label="Acciones"><button type="button" class="btn btn-secundario" data-accion="pagado" data-id="' + escapar(item.id) + '" data-pagado="' + (item.pagado ? "1" : "0") + '">' + (item.pagado ? "Marcar pendiente" : "Marcar pagado") + '</button> <button type="button" class="btn btn-peligro" data-accion="anular" data-id="' + escapar(item.id) + '">Anular</button></td></tr>';
     }).join("");
   }
 
@@ -802,7 +804,13 @@
   }
 
   function onInput(evento) {
-    if (evento.target.id === "buscar-eventos") {
+    var campo = evento.target;
+    if (campo && (campo.name === "dni" || campo.name === "whatsapp")) {
+      var maximo = campo.name === "dni" ? 8 : 9;
+      var solo = String(campo.value || "").replace(/\D/g, "").slice(0, maximo);
+      if (campo.value !== solo) campo.value = solo;
+    }
+    if (campo.id === "buscar-eventos") {
       estado.busqueda = evento.target.value;
       pintarGrilla();
     }

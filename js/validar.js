@@ -48,16 +48,14 @@
     if (limpio(datos.nombres).length > 80) return "Los nombres son demasiado largos.";
     if (limpio(datos.apellidos).length < 2) return "Escribe tus apellidos.";
     if (limpio(datos.apellidos).length > 80) return "Los apellidos son demasiado largos.";
-    if (!/^\d{8,12}$/.test(soloDigitos(datos.dni))) return "El DNI debe tener entre 8 y 12 dígitos.";
-    if (!correoValido(datos.correo)) return "Escribe un correo válido.";
+    if (!/^\d{8}$/.test(soloDigitos(datos.dni))) return "El DNI debe tener 8 números.";
+    if (!correoValido(datos.correo)) return "Escribe un correo real, con arroba (@). Ahí llegará tu certificado.";
     if (limpio(datos.correo).length > 120) return "El correo es demasiado largo.";
     if (datos.categoria !== "profesional" && datos.categoria !== "estudiante") {
       return "Elige si participas como profesional o como estudiante.";
     }
     var telefono = soloDigitos(datos.whatsapp);
-    if (telefono.length < 8 || telefono.length > 15) {
-      return "Escribe un WhatsApp con código de país. Ejemplo: 51987654321.";
-    }
+    if (!/^\d{9}$/.test(telefono)) return "El WhatsApp debe tener 9 números, sin el código de país.";
     return "";
   }
 
