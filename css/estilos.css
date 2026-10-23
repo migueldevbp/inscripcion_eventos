@@ -769,6 +769,85 @@ p { margin: 0; }
 
 .modal .acciones { justify-content: flex-start; margin-top: 16px; }
 
+body.modal-abierto { overflow: hidden; }
+
+.modal-pago-fondo {
+  z-index: 40;
+  background: rgba(8, 24, 48, 0.58);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: fadeIn 0.28s ease;
+}
+
+.modal-pago {
+  width: min(480px, 100%);
+  max-height: min(92vh, 720px);
+  overflow: auto;
+  border-radius: 22px;
+  padding: 26px 24px 22px;
+  background: linear-gradient(160deg, #edf5ff 0%, #ffffff 42%, #fff8f2 100%);
+  border: 1px solid rgba(170, 200, 240, 0.95);
+  box-shadow: 0 28px 64px rgba(10, 32, 64, 0.32);
+  animation: modalPagoIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-pago .folio { margin-bottom: 10px; }
+
+.modal-pago h2 {
+  font-family: var(--serif);
+  font-size: clamp(1.55rem, 3.5vw, 1.9rem);
+  color: var(--navy-deep);
+  margin-bottom: 6px;
+}
+
+.modal-pago .nota { margin-bottom: 14px; }
+
+.resumen-pago {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(201, 218, 245, 0.85);
+}
+
+.resumen-pago p { margin: 0; font-size: 0.95rem; line-height: 1.4; }
+
+.resumen-pago strong {
+  display: inline-block;
+  min-width: 5.5rem;
+  color: var(--navy-mid);
+  font-weight: 700;
+}
+
+.modal-pago .lista-org-contacto { margin-top: 4px; }
+
+.modal-pago .org-chip {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-pago .org-chip > div { display: grid; gap: 2px; min-width: 0; }
+
+.modal-pago .org-tel {
+  color: var(--navy-mid);
+  font-weight: 650;
+  font-size: 0.92rem;
+}
+
+.modal-pago .acciones {
+  margin-top: 18px;
+  width: 100%;
+}
+
+.modal-pago .acciones .btn { width: 100%; justify-content: center; }
+
+@keyframes modalPagoIn {
+  from { opacity: 0; transform: translateY(22px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .cargando { padding: 64px 16px; text-align: center; color: var(--muted); }
 
 .esqueleto { padding: 28px 0 64px; }

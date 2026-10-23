@@ -196,6 +196,21 @@
     return String(valor || "");
   }
 
+  function precioDeTarifa(evento, categoria) {
+    var nombre = nombreCategoria(categoria) || String(categoria || "");
+    var tarifas = tarifasDe(evento);
+    var i;
+    for (i = 0; i < tarifas.length; i++) {
+      var etiqueta = String(tarifas[i].nombre || "");
+      if (etiqueta.toLowerCase() === nombre.toLowerCase() || etiqueta.toLowerCase() === String(categoria || "").toLowerCase()) {
+        return tarifas[i].precio || "";
+      }
+    }
+    if (categoria === "profesional" || /^profesional$/i.test(nombre)) return (evento && evento.precioProfesional) || "";
+    if (categoria === "estudiante" || /^estudiante$/i.test(nombre)) return (evento && evento.precioEstudiante) || "";
+    return "";
+  }
+
   function muestraConteo(evento) {
     return !evento || evento.mostrarInscritos !== false;
   }
@@ -225,9 +240,28 @@
       '<button type="button" class="btn btn-peligro" data-accion="quitar-org">Quitar</button></div>';
   }
 
-  function mensajeWhatsappPago(tituloEvento, categoria) {
-    var cat = String(categoria || "").trim() || "la categoría elegida";
-    return 'Hola, vengo del Portal de Capacitaciones. Estoy interesado/a en "' + String(tituloEvento || "este evento") + '" y quisiera pagar. Me inscribí en la categoría ' + cat + ".";
+  function mensajeWhatsappPago(datos) {
+    var info = datos || {};
+    var cat = nombreCategoria(info.categoria) || String(info.categoria || "").trim() || "la categoría elegida";
+    var precio = String(info.precio || "").trim();
+    var catLinea = cat + (precio ? " (" + precioVisible(precio) + ")" : "");
+    var lineas = [
+      "Hola, me inscribí desde el Portal de Capacitaciones.",
+      "",
+      "Evento: " + String(info.titulo || "este evento")
+    ];
+    if (info.organizacion) lineas.push("Organización: " + String(info.organizacion));
+    if (info.fecha) lineas.push("Fecha del evento: " + formatoFecha(info.fecha));
+    lineas.push("Categoría de pago: " + catLinea);
+    if (info.folio) lineas.push("Folio de inscripción: " + String(info.folio));
+    if (info.nombres || info.apellidos) {
+      lineas.push("Nombre: " + [info.nombres, info.apellidos].filter(Boolean).join(" ").trim());
+    }
+    if (info.dni) lineas.push("DNI: " + String(info.dni));
+    if (info.correo) lineas.push("Correo: " + String(info.correo));
+    if (info.whatsapp) lineas.push("Mi WhatsApp: " + String(info.whatsapp));
+    lineas.push("", "Quisiera coordinar el pago de esa categoría. Gracias.");
+    return lineas.join("\n");
   }
 
   function enlaceWaOrganizador(whatsapp, mensaje) {
@@ -240,7 +274,13 @@
   function htmlContactoOrganizadores(evento, categoria) {
     var orgs = organizadoresDe(evento).filter(function (item) { return item.whatsapp; });
     if (!orgs.length) return "";
-    var mensaje = mensajeWhatsappPago(evento.titulo, categoria);
+    var mensaje = mensajeWhatsappPago({
+      titulo: evento.titulo,
+      organizacion: evento.organizacion,
+      fecha: evento.fecha,
+      categoria: categoria,
+      precio: precioDeTarifa(evento, categoria)
+    });
     var titulo = orgs.length === 1 ? "Organizador para el pago" : orgs.length + " organizadores para el pago";
     return '<div class="contacto-orgs"><h2>' + titulo + '</h2><p class="nota">Escríbeles por WhatsApp para coordinar el pago. El mensaje ya va listo.</p><div class="lista-org-contacto">' +
       orgs.map(function (org) {
@@ -250,6 +290,78 @@
           "</div>";
       }).join("") +
       "</div></div>";
+  }
+
+  function ordenarOrgsPago(orgs, refUsuario) {
+    var lista = (orgs || []).slice();
+    if (!refUsuario) return lista;
+    var ref = String(refUsuario).toLowerCase();
+    lista.sort(function (a, b) {
+      var aRef = String(a.usuario || "").toLowerCase() === ref ? 0 : 1;
+      var bRef = String(b.usuario || "").toLowerCase() === ref ? 0 : 1;
+      return aRef - bRef;
+    });
+    return lista;
+  }
+
+  function cerrarModalPago(fondo) {
+    if (!fondo || !fondo.parentNode) return;
+    document.body.classList.remove("modal-abierto");
+    document.removeEventListener("keydown", fondo._teclaPago);
+    fondo.remove();
+    ir("#/");
+  }
+
+  function mostrarModalPago(opciones) {
+    var datos = opciones || {};
+    var orgs = ordenarOrgsPago(datos.organizadores || [], datos.refOrganizador).filter(function (item) {
+      return item.whatsapp;
+    });
+    var mensaje = mensajeWhatsappPago(datos.mensaje || {});
+    var catLabel = nombreCategoria(datos.mensaje && datos.mensaje.categoria) || (datos.mensaje && datos.mensaje.categoria) || "";
+    var precioLabel = datos.mensaje && datos.mensaje.precio ? precioVisible(datos.mensaje.precio) : "";
+    var tituloModal = orgs.length === 1 ? "Organizador para el pago" : (orgs.length ? "Elige a quién escribir" : "Inscripción registrada");
+    var listaHtml = orgs.length
+      ? orgs.map(function (org) {
+          var href = enlaceWaOrganizador(org.whatsapp, mensaje);
+          return '<div class="org-chip">' +
+            "<div><strong>" + escapar(org.nombre || org.usuario) + "</strong>" +
+            '<span class="org-tel">' + escapar(org.whatsapp) + "</span></div>" +
+            (href ? '<a class="btn btn-wa" href="' + escapar(href) + '" target="_blank" rel="noopener noreferrer">WhatsApp</a>' : "") +
+            "</div>";
+        }).join("")
+      : '<p class="nota">Este evento aún no tiene WhatsApp de organizador cargado. Guarda tu folio y contacta a la organización por otros medios.</p>';
+
+    var fondo = document.createElement("div");
+    fondo.className = "modal-fondo modal-pago-fondo";
+    fondo.innerHTML =
+      '<div class="modal modal-pago" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-pago">' +
+      (datos.folio ? '<p class="folio">' + escapar(datos.folio) + "</p>" : "") +
+      '<h2 id="titulo-modal-pago">' + escapar(tituloModal) + "</h2>" +
+      '<p class="nota">Escríbeles por WhatsApp para coordinar el pago. El mensaje ya identifica el evento y tu categoría.</p>' +
+      '<div class="resumen-pago">' +
+      "<p><strong>Evento</strong> " + escapar(datos.mensaje && datos.mensaje.titulo || "") + "</p>" +
+      (catLabel ? "<p><strong>Categoría</strong> " + escapar(catLabel) + (precioLabel ? " · " + escapar(precioLabel) : "") + "</p>" : "") +
+      "</div>" +
+      '<div class="lista-org-contacto">' + listaHtml + "</div>" +
+      '<div class="acciones"><button type="button" class="btn btn-primario" data-cerrar-pago>Listo, volver al inicio</button></div>' +
+      "</div>";
+
+    function tecla(evento) {
+      if (evento.key === "Escape") cerrarModalPago(fondo);
+    }
+    fondo._teclaPago = tecla;
+    document.body.classList.add("modal-abierto");
+    document.body.appendChild(fondo);
+    document.addEventListener("keydown", tecla);
+    var botonCerrar = fondo.querySelector("[data-cerrar-pago]");
+    if (botonCerrar) {
+      botonCerrar.focus();
+      botonCerrar.onclick = function () { cerrarModalPago(fondo); };
+    }
+    fondo.addEventListener("click", function (evento) {
+      if (evento.target === fondo) cerrarModalPago(fondo);
+    });
   }
 
   function enlaceOrganizador(eventoId, usuario) {
@@ -950,22 +1062,27 @@
       try {
         var creada = await window.API.inscribir(inscripcion);
         var eventoOk = estado.eventoVista || { id: inscripcion.eventoId, titulo: "el evento", organizadores: [] };
-        var orgsPago = organizadoresDe(eventoOk).filter(function (item) { return item.whatsapp; });
-        if (estado.refOrganizador) {
-          var preferido = orgsPago.filter(function (item) {
-            return String(item.usuario || "").toLowerCase() === String(estado.refOrganizador).toLowerCase();
-          });
-          if (preferido.length) orgsPago = preferido;
-        }
-        var botonesWa = orgsPago.map(function (org) {
-          var href = enlaceWaOrganizador(org.whatsapp, mensajeWhatsappPago(eventoOk.titulo, inscripcion.categoria));
-          return href
-            ? '<a class="btn btn-wa" style="width:100%;margin-top:8px" href="' + escapar(href) + '" target="_blank" rel="noopener noreferrer">Pagar / escribir a ' + escapar(org.nombre || org.usuario) + "</a>"
-            : "";
-        }).join("");
-        form.closest(".tarjeta-form").innerHTML = '<div class="exito"><p class="folio">' + escapar(creada.id) + '</p><h2>Inscripción registrada</h2><p>Guarda ese número. Quedaste en la lista. Ahora escribe al organizador por WhatsApp para coordinar el pago; el mensaje ya incluye el evento y tu categoría.</p>' +
-          (botonesWa || '<p class="nota" style="margin-top:10px">Este evento aún no tiene WhatsApp de organizador cargado.</p>') +
-          '<p style="margin-top:14px"><a class="btn btn-secundario" href="#/">Volver a los eventos</a></p></div>';
+        var precioCat = precioDeTarifa(eventoOk, inscripcion.categoria);
+        avisar("Inscripción registrada. Folio " + creada.id + ".");
+        mostrarModalPago({
+          folio: creada.id,
+          refOrganizador: estado.refOrganizador || "",
+          organizadores: organizadoresDe(eventoOk),
+          mensaje: {
+            titulo: eventoOk.titulo,
+            organizacion: eventoOk.organizacion,
+            fecha: eventoOk.fecha,
+            categoria: inscripcion.categoria,
+            precio: precioCat,
+            folio: creada.id,
+            nombres: inscripcion.nombres,
+            apellidos: inscripcion.apellidos,
+            dni: inscripcion.dni,
+            correo: inscripcion.correo,
+            whatsapp: inscripcion.whatsapp
+          }
+        });
+        boton.disabled = false;
       } catch (error) {
         ponerError(form, error.message);
         boton.disabled = false;
