@@ -747,6 +747,40 @@ p { margin: 0; }
 .fila-org { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(8rem, 10rem) minmax(8rem, 10rem) auto; gap: 10px; align-items: end; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .fila-org .btn { min-height: 46px; }
 .enlace-ref { display: inline-block; max-width: 100%; overflow-wrap: anywhere; background: #e8f1ff; padding: 8px 10px; border-radius: 10px; font-size: 0.88rem; color: var(--navy-deep); }
+
+.enlace-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-top: 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #edf5ff, #fff8f2);
+  border: 1px solid rgba(201, 218, 245, 0.9);
+  box-shadow: var(--shadow-soft);
+}
+
+.enlace-card p {
+  margin: 0;
+  flex: 1 1 220px;
+  color: var(--navy-mid);
+  font-weight: 550;
+  line-height: 1.4;
+}
+
+.enlace-card .btn { flex: none; }
+
+.enlace-card-aviso {
+  background: linear-gradient(145deg, #fff7ef, #edf5ff);
+}
+
+.lista-enlaces-org {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
 .contacto-orgs { margin-top: 22px; padding: 16px; border-radius: 18px; background: linear-gradient(145deg, #edf5ff, #fff8f2); border: 1px solid var(--line); }
 .contacto-orgs h2 { font-size: 1.35rem; margin-bottom: 6px; }
 .lista-org-contacto { display: grid; gap: 10px; margin-top: 12px; }

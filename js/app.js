@@ -714,7 +714,8 @@
     });
     var filasOrg = orgsForm.map(htmlFilaOrganizador).join("");
     var enlaces = id ? orgsForm.filter(function (item) { return item.usuario; }).map(function (item) {
-      return '<p class="nota">Enlace de <strong>' + escapar(item.usuario) + '</strong>: <code class="enlace-ref">' + escapar(enlaceOrganizador(id, item.usuario)) + "</code></p>";
+      return '<div class="enlace-card"><p>Enlace de <strong>' + escapar(item.nombre || item.usuario) + "</strong></p>" +
+        '<button type="button" class="btn btn-secundario" data-accion="copiar-enlace" data-enlace="' + escapar(enlaceOrganizador(id, item.usuario)) + '">Copiar enlace</button></div>';
     }).join("") : "";
     document.title = (id ? "Editar evento" : "Nuevo evento") + " · " + nombreSitio();
     return marco('<div class="subnav"><a class="btn btn-secundario" href="#/admin">Eventos</a><a class="btn btn-primario" href="#/admin/nuevo">Nuevo evento</a></div>' +
@@ -740,9 +741,9 @@
       '<div class="campo campo-ancho"><span>Requisitos</span><textarea name="requisitos" maxlength="2000">' + escapar(evento.requisitos || "") + "</textarea></div>" +
       '<label class="check"><input type="checkbox" name="mostrarInscritos"' + (evento.mostrarInscritos !== false ? " checked" : "") + "> Mostrar cuántos inscritos hay en la página pública</label>" +
       '<label class="check"><input type="checkbox" name="activo"' + (evento.activo ? " checked" : "") + "> Inscripciones abiertas</label></section>" +
-      '<section class="bloque"><h2>Organizadores</h2><p class="nota">Puedes crear varios. Cada uno entra con su usuario, ve sus propios inscritos y el total. Su WhatsApp aparece en la ficha para que los inscritos coordinen el pago. Entrégale a cada uno su enlace personal (con <code>?ref=</code>). La clave no se vuelve a mostrar.</p>' +
+      '<section class="bloque"><h2>Organizadores</h2><p class="nota">Puedes crear varios. Cada uno entra con su usuario, ve sus propios inscritos y el total. Entrega a cada uno su enlace personal (botón Copiar). La clave no se vuelve a mostrar.</p>' +
       '<div id="lista-orgs">' + filasOrg + '</div><button type="button" class="btn btn-secundario" data-accion="agregar-org">Agregar organizador</button>' +
-      enlaces +
+      (enlaces ? '<div class="lista-enlaces-org">' + enlaces + "</div>" : "") +
       '<div class="acciones-form"><button class="btn btn-primario" type="submit">' + (id ? "Guardar cambios" : "Crear evento") + "</button></div></section></form>");
   }
 
@@ -823,10 +824,16 @@
       vistas = '<div class="chips" style="margin:10px 0 0"><button type="button" class="chip" data-accion="vista-inscritos" data-vista="mios" aria-pressed="' + (estado.vistaInscritos === "mios" ? "true" : "false") + '">Mis inscritos</button><button type="button" class="chip" data-accion="vista-inscritos" data-vista="todos" aria-pressed="' + (estado.vistaInscritos === "todos" ? "true" : "false") + '">Total del evento</button></div>';
       statsExtra = '<article class="stat"><span>Total del evento</span><strong>' + (opciones.totales.inscritos || 0) + '</strong></article><article class="stat"><span>Mis inscritos</span><strong>' + (opciones.totales.mios || 0) + "</strong></article>";
       if (estado.sesion.usuario && evento.id) {
-        enlaceMio = '<div class="bloque" style="margin-top:12px;padding:14px"><p class="nota" style="margin:0 0 6px">Tu enlace personal para métricas. Quien se inscriba por aquí cuenta como tuyo:</p><code class="enlace-ref">' + escapar(enlaceOrganizador(evento.id, estado.sesion.usuario)) + '</code> <button type="button" class="btn btn-secundario" data-accion="copiar-enlace" data-enlace="' + escapar(enlaceOrganizador(evento.id, estado.sesion.usuario)) + '">Copiar</button></div>';
+        enlaceMio = '<div class="enlace-card">' +
+          "<p>Comparte tu enlace para que las nuevas inscripciones cuenten como tuyas.</p>" +
+          '<button type="button" class="btn btn-primario" data-accion="copiar-enlace" data-enlace="' + escapar(enlaceOrganizador(evento.id, estado.sesion.usuario)) + '">Copiar mi enlace</button>' +
+          "</div>";
       }
       if (Number(opciones.totales.inscritos || 0) > 0 && Number(opciones.totales.mios || 0) === 0) {
-        enlaceMio += '<div class="bloque" style="margin-top:12px;padding:14px"><p class="nota" style="margin:0 0 10px">Hay inscritos en el evento sin atribución (entraron sin tu enlace). Puedes asignártelos una vez.</p><button type="button" class="btn btn-primario" data-accion="reclamar-inscritos">Asignarme los inscritos sin atribución</button></div>';
+        enlaceMio += '<div class="enlace-card enlace-card-aviso">' +
+          "<p>Hay personas inscritas que aún no están en tu lista. Puedes sumarlas una sola vez.</p>" +
+          '<button type="button" class="btn btn-secundario" data-accion="reclamar-inscritos">Sumar a mi lista</button>' +
+          "</div>";
       }
     }
     var cabeceras = "<th>Folio</th><th>Nombre</th><th>DNI</th><th>Correo</th><th>Categoría</th>" +
@@ -1206,8 +1213,8 @@
     }
     if (accion === "reclamar-inscritos") {
       var seguroReclamo = await confirmar(
-        "¿Asignarte todas las inscripciones de este evento que aún no tienen organizador? Pasarán a contar en Mis inscritos.",
-        "Asignármelos"
+        "¿Sumar a tu lista las inscripciones que aún no tienen organizador?",
+        "Sumar a mi lista"
       );
       if (!seguroReclamo) return;
       boton.disabled = true;
@@ -1225,7 +1232,7 @@
     if (accion === "copiar-enlace") {
       var texto = boton.dataset.enlace || "";
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(texto).then(function () { avisar("Enlace copiado."); }).catch(function () {
+        navigator.clipboard.writeText(texto).then(function () { avisar("Enlace copiado. Ya puedes compartirlo."); }).catch(function () {
           window.prompt("Copia este enlace:", texto);
         });
       } else {
