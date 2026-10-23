@@ -21,7 +21,7 @@ var HORAS_SESION = 12;
 var HEADERS = {
   Usuarios: ["id", "usuario", "clave_hash", "salt", "rol", "evento_id", "nombre", "activo", "creado_en"],
   Eventos: ["id", "titulo", "organizacion", "tipo", "descripcion", "fecha", "hora", "lugar", "modalidad", "enlace", "cupo", "precio_profesional", "precio_estudiante", "requisitos", "contacto", "imagen", "activo", "creado_en", "tarifas", "mostrar_inscritos"],
-  Inscripciones: ["id", "evento_id", "nombres", "apellidos", "dni", "correo", "categoria", "whatsapp", "pagado", "fecha"],
+  Inscripciones: ["id", "evento_id", "nombres", "apellidos", "dni", "correo", "categoria", "whatsapp", "pagado", "fecha", "organizador_id"],
   Sesiones: ["token", "usuario_id", "expira"]
 };
 
@@ -450,7 +450,10 @@ function limpiarTarifas(lista) {
   return { lista: out };
 }
 
-function jsonInscripcion(row) {
+function jsonInscripcion(row, mapaOrg) {
+  mapaOrg = mapaOrg || mapaOrganizadores();
+  var orgId = String(row.organizador_id || "");
+  var org = orgId ? mapaOrg[orgId] : null;
   return {
     id: String(row.id),
     eventoId: String(row.evento_id),
@@ -461,7 +464,10 @@ function jsonInscripcion(row) {
     categoria: String(row.categoria || ""),
     whatsapp: soloDigitos(sinMarca(row.whatsapp)),
     pagado: esSi(row.pagado),
-    fecha: comoFechaHora(row.fecha)
+    fecha: comoFechaHora(row.fecha),
+    organizadorId: orgId,
+    organizadorUsuario: org ? String(org.usuario || "").toLowerCase() : "",
+    organizadorNombre: org ? sinMarca(org.nombre).replace(/^\s+|\s+$/g, "") : ""
   };
 }
 
@@ -477,16 +483,39 @@ function conteos() {
   return map;
 }
 
-function organizadorDe(eventoId) {
+function organizadoresDe(eventoId) {
   var usuarios = leerObjetos("Usuarios");
-  var respaldo = null;
+  var activos = [];
+  var inactivos = [];
   for (var i = 0; i < usuarios.length; i++) {
-    if (String(usuarios[i].rol) === "organizador" && String(usuarios[i].evento_id) === String(eventoId)) {
-      if (esSi(usuarios[i].activo)) return usuarios[i];
-      respaldo = usuarios[i];
-    }
+    if (String(usuarios[i].rol) !== "organizador" || String(usuarios[i].evento_id) !== String(eventoId)) continue;
+    if (esSi(usuarios[i].activo)) activos.push(usuarios[i]);
+    else inactivos.push(usuarios[i]);
   }
-  return respaldo;
+  return activos.length ? activos : inactivos;
+}
+
+function organizadorDe(eventoId) {
+  var lista = organizadoresDe(eventoId);
+  return lista.length ? lista[0] : null;
+}
+
+function mapaOrganizadores() {
+  var usuarios = leerObjetos("Usuarios");
+  var map = {};
+  for (var i = 0; i < usuarios.length; i++) {
+    map[String(usuarios[i].id)] = usuarios[i];
+  }
+  return map;
+}
+
+function jsonOrganizador(row) {
+  return {
+    id: String(row.id),
+    usuario: String(row.usuario || "").toLowerCase(),
+    nombre: sinMarca(row.nombre).replace(/^\s+|\s+$/g, ""),
+    activo: esSi(row.activo)
+  };
 }
 
 function jsonEvento(evento, extra) {
@@ -518,6 +547,7 @@ function jsonEvento(evento, extra) {
     data.pagados = extra.pagados || 0;
     data.organizadorUsuario = extra.organizadorUsuario || "";
     data.organizadorNombre = extra.organizadorNombre || "";
+    data.organizadores = extra.organizadores || [];
   }
   return data;
 }
@@ -526,9 +556,11 @@ function extraDe(evento, mapa, admin) {
   var conteo = mapa[evento.id] || { inscritos: 0, pagados: 0 };
   var extra = { inscritos: conteo.inscritos, pagados: conteo.pagados, admin: admin };
   if (admin) {
-    var org = organizadorDe(evento.id);
-    extra.organizadorUsuario = org ? String(org.usuario || "") : "";
-    extra.organizadorNombre = org ? sinMarca(org.nombre) : "";
+    var orgs = organizadoresDe(evento.id);
+    extra.organizadores = [];
+    for (var i = 0; i < orgs.length; i++) extra.organizadores.push(jsonOrganizador(orgs[i]));
+    extra.organizadorUsuario = extra.organizadores[0] ? extra.organizadores[0].usuario : "";
+    extra.organizadorNombre = extra.organizadores[0] ? extra.organizadores[0].nombre : "";
   }
   return extra;
 }
@@ -586,6 +618,17 @@ function inscribir(body) {
       if (tarifasEvento[t].nombre === categoria) coincide = true;
     }
     if (!coincide) return { ok: false, error: "Elige una tarifa de este evento." };
+    var ref = limpio(body.organizadorUsuario || body.ref).toLowerCase();
+    var orgId = "";
+    if (ref) {
+      var orgs = organizadoresDe(evento.id);
+      var hallado = null;
+      for (var o = 0; o < orgs.length; o++) {
+        if (String(orgs[o].usuario || "").toLowerCase() === ref && esSi(orgs[o].activo)) hallado = orgs[o];
+      }
+      if (!hallado) return { ok: false, error: "Ese enlace de organizador no es válido para este evento." };
+      orgId = String(hallado.id);
+    }
     var folio = siguienteFolio();
     var row = {
       id: folio,
@@ -597,7 +640,8 @@ function inscribir(body) {
       categoria: textoCelda(categoria),
       whatsapp: forzarTexto(soloDigitos(body.whatsapp)),
       pagado: "NO",
-      fecha: forzarTexto(ahoraTexto())
+      fecha: forzarTexto(ahoraTexto()),
+      organizador_id: orgId
     };
     agregarFila(hoja("Inscripciones"), HEADERS.Inscripciones, row);
     return { ok: true, inscripcion: jsonInscripcion(row) };
@@ -777,21 +821,35 @@ function detalleAdmin(body) {
 
 function miPanel(body) {
   var usuario = exigir(body, ["organizador"]);
-  if (!usuario.eventoId) return { ok: true, evento: null, inscripciones: [] };
+  if (!usuario.eventoId) return { ok: true, evento: null, inscripciones: [], misInscripciones: [], totales: { inscritos: 0, pagados: 0, mios: 0 } };
   var evento = buscarEvento(usuario.eventoId);
-  if (!evento) return { ok: true, evento: null, inscripciones: [] };
+  if (!evento) return { ok: true, evento: null, inscripciones: [], misInscripciones: [], totales: { inscritos: 0, pagados: 0, mios: 0 } };
+  var todas = inscripcionesDe(evento.id);
+  var mias = [];
+  for (var i = 0; i < todas.length; i++) {
+    if (String(todas[i].organizadorId) === String(usuario.id)) mias.push(todas[i]);
+  }
+  var pagados = 0;
+  for (var p = 0; p < todas.length; p++) if (todas[p].pagado) pagados++;
   return {
     ok: true,
     evento: jsonEvento(evento, extraDe(evento, conteos(), true)),
-    inscripciones: inscripcionesDe(evento.id)
+    inscripciones: todas,
+    misInscripciones: mias,
+    totales: {
+      inscritos: todas.length,
+      pagados: pagados,
+      mios: mias.length
+    }
   };
 }
 
 function inscripcionesDe(eventoId) {
   var filas = leerObjetos("Inscripciones");
+  var mapa = mapaOrganizadores();
   var lista = [];
   for (var i = 0; i < filas.length; i++) {
-    if (String(filas[i].evento_id) === String(eventoId)) lista.push(jsonInscripcion(filas[i]));
+    if (String(filas[i].evento_id) === String(eventoId)) lista.push(jsonInscripcion(filas[i], mapa));
   }
   lista.sort(function (a, b) { return String(b.fecha).localeCompare(String(a.fecha)); });
   return lista;
@@ -912,26 +970,21 @@ function guardarEvento(body) {
     var esNuevo = !body.id;
     var actual = esNuevo ? null : buscarEvento(body.id);
     if (!esNuevo && !actual) return { ok: false, error: "No encontramos ese evento." };
-    var error = validarEvento(body, {
-      exigirOrganizador: esNuevo,
-      usuarioNuevo: !actual || !organizadorDe(actual.id)
-    });
+    var error = validarEvento(body, { exigirOrganizador: esNuevo });
     if (error) return { ok: false, error: error };
     var entrada = normalizarEntradaEvento(body);
-    var orgActual = actual ? organizadorDe(actual.id) : null;
-    if (entrada.organizadorUsuario) {
-      var usuarios = leerObjetos("Usuarios");
+    var usuarios = leerObjetos("Usuarios");
+    for (var i = 0; i < entrada.organizadores.length; i++) {
+      var org = entrada.organizadores[i];
       var ocupado = null;
-      for (var i = 0; i < usuarios.length; i++) {
-        if (String(usuarios[i].usuario).toLowerCase() === entrada.organizadorUsuario) ocupado = usuarios[i];
+      for (var u = 0; u < usuarios.length; u++) {
+        if (String(usuarios[u].usuario).toLowerCase() === org.usuario) ocupado = usuarios[u];
       }
-      if (ocupado && String(ocupado.rol) === "admin") return { ok: false, error: "Ese usuario está reservado para el administrador." };
+      if (ocupado && String(ocupado.rol) === "admin") return { ok: false, error: "El usuario " + org.usuario + " está reservado para el administrador." };
       if (ocupado && String(ocupado.evento_id || "") && (!actual || String(ocupado.evento_id) !== actual.id)) {
-        return { ok: false, error: "Ese usuario ya pertenece a otro evento." };
+        return { ok: false, error: "El usuario " + org.usuario + " ya pertenece a otro evento." };
       }
-      if (orgActual && String(orgActual.usuario).toLowerCase() !== entrada.organizadorUsuario) {
-        return { ok: false, error: "Este evento ya tiene el usuario " + orgActual.usuario + ". Puedes cambiarle la clave, no el usuario." };
-      }
+      if (!ocupado && !org.clave) return { ok: false, error: "La clave de " + org.usuario + " debe tener al menos 6 caracteres." };
     }
     if (body.imagenArchivo) entrada.imagen = publicarImagen(body.imagenArchivo);
     var id = esNuevo ? nuevoId("EVT") : actual.id;
@@ -965,11 +1018,33 @@ function guardarEvento(body) {
       for (var c = 0; c < HEADERS.Eventos.length; c++) row.push(fila[HEADERS.Eventos[c]] == null ? "" : fila[HEADERS.Eventos[c]]);
       sh.getRange(nFila, 1, 1, HEADERS.Eventos.length).setValues([row]);
     }
-    if (entrada.organizadorUsuario) guardarOrganizador(entrada, id);
+    sincronizarOrganizadores(entrada.organizadores, id);
     SpreadsheetApp.flush();
     var guardado = buscarEvento(id);
     return { ok: true, evento: jsonEvento(guardado, extraDe(guardado, conteos(), true)) };
   });
+}
+
+function sincronizarOrganizadores(lista, eventoId) {
+  var guardados = {};
+  for (var i = 0; i < lista.length; i++) {
+    guardarOrganizador({
+      organizadorUsuario: lista[i].usuario,
+      organizadorNombre: lista[i].nombre,
+      organizadorClave: lista[i].clave || ""
+    }, eventoId);
+    guardados[lista[i].usuario] = true;
+  }
+  var usuarios = leerObjetos("Usuarios");
+  var sh = hoja("Usuarios");
+  for (var u = 0; u < usuarios.length; u++) {
+    if (String(usuarios[u].rol) !== "organizador") continue;
+    if (String(usuarios[u].evento_id) !== String(eventoId)) continue;
+    var nombre = String(usuarios[u].usuario || "").toLowerCase();
+    if (!guardados[nombre] && esSi(usuarios[u].activo)) {
+      sh.getRange(filaPorId(sh, usuarios[u].id), columna("Usuarios", "activo")).setValue("NO");
+    }
+  }
 }
 
 function guardarOrganizador(entrada, eventoId) {
@@ -1015,8 +1090,36 @@ function crearUsuario(datos) {
   });
 }
 
+function limpiarOrganizadores(lista) {
+  var origen = lista || [];
+  var out = [];
+  var vistos = {};
+  for (var i = 0; i < origen.length && out.length < 10; i++) {
+    var usuario = limpio(origen[i] && origen[i].usuario).toLowerCase();
+    var nombre = limpio(origen[i] && origen[i].nombre);
+    var clave = String((origen[i] && origen[i].clave) || "");
+    if (!usuario && !nombre && !clave) continue;
+    if (!/^[a-z0-9._]{3,20}$/.test(usuario)) return { error: "El usuario del organizador usa minúsculas, números, punto o guion bajo, de 3 a 20 caracteres." };
+    if (usuario === "admin") return { error: "Ese usuario está reservado para el administrador." };
+    if (nombre.length < 2 || nombre.length > 80) return { error: "Escribe el nombre de cada organizador." };
+    if (vistos[usuario]) return { error: "Hay dos organizadores con el mismo usuario." };
+    vistos[usuario] = true;
+    out.push({ usuario: usuario, nombre: nombre, clave: clave, existente: Boolean(origen[i].existente) });
+  }
+  return { lista: out };
+}
+
 function normalizarEntradaEvento(body) {
   var cupo = limpio(body.cupo);
+  var orgs = body.organizadores;
+  if ((!orgs || !orgs.length) && limpio(body.organizadorUsuario)) {
+    orgs = [{
+      usuario: body.organizadorUsuario,
+      nombre: body.organizadorNombre,
+      clave: body.organizadorClave || "",
+      existente: false
+    }];
+  }
   return {
     titulo: limpio(body.titulo),
     organizacion: limpio(body.organizacion),
@@ -1034,9 +1137,7 @@ function normalizarEntradaEvento(body) {
     contacto: limpio(body.contacto),
     imagen: limpio(body.imagen),
     activo: Boolean(body.activo),
-    organizadorUsuario: limpio(body.organizadorUsuario).toLowerCase(),
-    organizadorNombre: limpio(body.organizadorNombre),
-    organizadorClave: String(body.organizadorClave || "")
+    organizadores: (limpiarOrganizadores(orgs).lista) || []
   };
 }
 
@@ -1072,15 +1173,26 @@ function validarEvento(datos, opciones) {
   var cupo = limpio(datos.cupo);
   if (cupo && !/^\d+$/.test(cupo)) return "El cupo debe ser un número entero, o quedar vacío si no hay límite.";
   if (cupo && Number(cupo) > 100000) return "El cupo es demasiado alto.";
-  var usuario = limpio(datos.organizadorUsuario).toLowerCase();
-  var clave = String(datos.organizadorClave || "");
-  if (opciones.exigirOrganizador && !usuario) return "Asigna un usuario al organizador de este evento.";
-  if (usuario && !/^[a-z0-9._]{3,20}$/.test(usuario)) return "El usuario del organizador usa minúsculas, números, punto o guion bajo, de 3 a 20 caracteres.";
-  if (usuario === "admin") return "Ese usuario está reservado para el administrador.";
-  if (usuario && limpio(datos.organizadorNombre).length < 2) return "Escribe el nombre del organizador.";
-  if (limpio(datos.organizadorNombre).length > 80) return "El nombre del organizador es demasiado largo.";
-  if ((opciones.exigirOrganizador || opciones.usuarioNuevo) && usuario && clave.length < 6) return "La clave del organizador debe tener al menos 6 caracteres.";
-  if (clave && clave.length < 6) return "La nueva clave debe tener al menos 6 caracteres.";
-  if (clave.length > 80) return "La clave es demasiado larga.";
+  var orgs = datos.organizadores;
+  if ((!orgs || !orgs.length) && limpio(datos.organizadorUsuario)) {
+    orgs = [{
+      usuario: datos.organizadorUsuario,
+      nombre: datos.organizadorNombre,
+      clave: datos.organizadorClave || "",
+      existente: !opciones.exigirOrganizador && !opciones.usuarioNuevo
+    }];
+  }
+  var orgsLimpios = limpiarOrganizadores(orgs);
+  if (orgsLimpios.error) return orgsLimpios.error;
+  if (!orgsLimpios.lista.length) return "Agrega al menos un organizador.";
+  if (orgsLimpios.lista.length > 10) return "Puedes agregar hasta 10 organizadores.";
+  for (var i = 0; i < orgsLimpios.lista.length; i++) {
+    var org = orgsLimpios.lista[i];
+    if ((!org.existente || opciones.exigirOrganizador) && org.clave.length < 6) {
+      return "La clave de " + org.usuario + " debe tener al menos 6 caracteres.";
+    }
+    if (org.clave && org.clave.length < 6) return "La nueva clave de " + org.usuario + " debe tener al menos 6 caracteres.";
+    if (org.clave.length > 80) return "La clave de " + org.usuario + " es demasiado larga.";
+  }
   return "";
 }

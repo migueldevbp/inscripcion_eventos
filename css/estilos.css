@@ -381,6 +381,9 @@ p { margin: 0; }
 
 .fila-tarifa { display: grid; grid-template-columns: minmax(0, 1fr) minmax(8rem, 11rem) auto; gap: 10px; align-items: end; margin-bottom: 10px; }
 .fila-tarifa .btn { min-height: 46px; }
+.fila-org { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(8rem, 11rem) auto; gap: 10px; align-items: end; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.fila-org .btn { min-height: 46px; }
+.enlace-ref { display: inline-block; max-width: 100%; overflow-wrap: anywhere; background: #eef3f9; padding: 8px 10px; border-radius: 10px; font-size: 0.88rem; }
 .stat-tarifas strong { font-family: var(--font); font-size: 1rem; font-weight: 650; line-height: 1.35; }
 .opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
@@ -571,7 +574,7 @@ p { margin: 0; }
   .acciones { justify-content: flex-start; }
   .quien { display: none; }
   .tabla { min-width: 0; }
-  .fila-tarifa { grid-template-columns: 1fr; }
+  .fila-tarifa, .fila-org { grid-template-columns: 1fr; }
   .tabla thead { display: none; }
   .tabla tr { display: block; padding: 8px 0; }
   .tabla td { display: flex; justify-content: space-between; gap: 12px; border-bottom: 0; padding: 6px 12px; }

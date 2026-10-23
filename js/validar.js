@@ -65,6 +65,44 @@
     return "";
   }
 
+  function revisarOrganizadores(lista, opciones) {
+    opciones = opciones || {};
+    var origen = lista || [];
+    var utiles = [];
+    var vistos = {};
+    for (var i = 0; i < origen.length; i++) {
+      var usuario = limpio(origen[i] && origen[i].usuario).toLowerCase();
+      var nombre = limpio(origen[i] && origen[i].nombre);
+      var clave = String((origen[i] && origen[i].clave) || "");
+      if (!usuario && !nombre && !clave) continue;
+      utiles.push({
+        usuario: usuario,
+        nombre: nombre,
+        clave: clave,
+        existente: Boolean(origen[i] && origen[i].existente)
+      });
+    }
+    if (!utiles.length) return "Agrega al menos un organizador.";
+    if (utiles.length > 10) return "Puedes agregar hasta 10 organizadores.";
+    for (var j = 0; j < utiles.length; j++) {
+      if (!/^[a-z0-9._]{3,20}$/.test(utiles[j].usuario)) {
+        return "El usuario del organizador usa minúsculas, números, punto o guion bajo, de 3 a 20 caracteres.";
+      }
+      if (utiles[j].usuario === "admin") return "Ese usuario está reservado para el administrador.";
+      if (utiles[j].nombre.length < 2 || utiles[j].nombre.length > 80) return "Escribe el nombre de cada organizador.";
+      if (vistos[utiles[j].usuario]) return "Hay dos organizadores con el mismo usuario.";
+      vistos[utiles[j].usuario] = true;
+      if ((!utiles[j].existente || opciones.exigirOrganizador) && utiles[j].clave.length < 6) {
+        return "La clave de " + utiles[j].usuario + " debe tener al menos 6 caracteres.";
+      }
+      if (utiles[j].clave && utiles[j].clave.length < 6) {
+        return "La nueva clave de " + utiles[j].usuario + " debe tener al menos 6 caracteres.";
+      }
+      if (utiles[j].clave.length > 80) return "La clave de " + utiles[j].usuario + " es demasiado larga.";
+    }
+    return "";
+  }
+
   function inscripcion(datos) {
     if (limpio(datos.nombres).length < 2) return "Escribe tus nombres.";
     if (limpio(datos.nombres).length > 80) return "Los nombres son demasiado largos.";
@@ -103,22 +141,16 @@
     var cupo = limpio(datos.cupo);
     if (cupo && !/^\d+$/.test(cupo)) return "El cupo debe ser un número entero, o quedar vacío si no hay límite.";
     if (cupo && Number(cupo) > 100000) return "El cupo es demasiado alto.";
-
-    var usuario = limpio(datos.organizadorUsuario).toLowerCase();
-    var clave = String(datos.organizadorClave || "");
-    if (opciones.exigirOrganizador && !usuario) return "Asigna un usuario al organizador de este evento.";
-    if (usuario && !/^[a-z0-9._]{3,20}$/.test(usuario)) {
-      return "El usuario del organizador usa minúsculas, números, punto o guion bajo, de 3 a 20 caracteres.";
+    var orgs = datos.organizadores;
+    if ((!orgs || !orgs.length) && limpio(datos.organizadorUsuario)) {
+      orgs = [{
+        usuario: datos.organizadorUsuario,
+        nombre: datos.organizadorNombre,
+        clave: datos.organizadorClave || "",
+        existente: !(opciones.exigirOrganizador || opciones.usuarioNuevo)
+      }];
     }
-    if (usuario === "admin") return "Ese usuario está reservado para el administrador.";
-    if (usuario && limpio(datos.organizadorNombre).length < 2) return "Escribe el nombre del organizador.";
-    if (limpio(datos.organizadorNombre).length > 80) return "El nombre del organizador es demasiado largo.";
-    if ((opciones.exigirOrganizador || opciones.usuarioNuevo) && usuario && clave.length < 6) {
-      return "La clave del organizador debe tener al menos 6 caracteres.";
-    }
-    if (clave && clave.length < 6) return "La nueva clave debe tener al menos 6 caracteres.";
-    if (clave.length > 80) return "La clave es demasiado larga.";
-    return "";
+    return revisarOrganizadores(orgs, opciones);
   }
 
   function claveNueva(actual, nueva) {

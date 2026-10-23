@@ -5,10 +5,13 @@
     tipo: "Todos",
     filtroPago: "todos",
     buscaInscritos: "",
+    vistaInscritos: "mios",
     rutaClave: "",
     eventos: [],
     listaInscritos: [],
-    eventoActual: null
+    listaTodas: [],
+    eventoActual: null,
+    refOrganizador: ""
   };
   var renderSeq = 0;
 
@@ -156,18 +159,58 @@
     return '<div class="fila-tarifa"><label class="campo"><span>Nombre</span><input name="tarifaNombre" maxlength="40" value="' + escapar(tarifa.nombre || "") + '" placeholder="Ej. Profesional"></label><label class="campo"><span>Precio</span><input name="tarifaPrecio" maxlength="40" value="' + escapar(tarifa.precio || "") + '" placeholder="S/ 80 o Gratuito"></label><button type="button" class="btn btn-peligro" data-accion="quitar-tarifa">Quitar</button></div>';
   }
 
+  function organizadoresDe(evento) {
+    if (evento && evento.organizadores && evento.organizadores.length) return evento.organizadores.slice(0, 10);
+    if (evento && evento.organizadorUsuario) {
+      return [{ usuario: evento.organizadorUsuario, nombre: evento.organizadorNombre || "", existente: true }];
+    }
+    return [];
+  }
+
+  function htmlFilaOrganizador(org) {
+    var existente = !!org.existente || !!org.id;
+    var usuarioCampo = existente
+      ? '<input type="hidden" name="orgUsuario" value="' + escapar(org.usuario || "") + '"><p class="nota" style="margin:0">Usuario: <strong>' + escapar(org.usuario || "") + "</strong></p>"
+      : '<label class="campo"><span>Usuario</span><input name="orgUsuario" maxlength="20" autocomplete="off" placeholder="ej. metrica1" value="' + escapar(org.usuario || "") + '"></label>';
+    return '<div class="fila-org" data-existente="' + (existente ? "1" : "0") + '">' +
+      usuarioCampo +
+      '<label class="campo"><span>Nombre</span><input name="orgNombre" maxlength="80" value="' + escapar(org.nombre || "") + '" placeholder="Nombre completo"></label>' +
+      '<label class="campo"><span>' + (existente ? "Nueva clave (opcional)" : "Clave") + '</span><input name="orgClave" type="password" minlength="6" autocomplete="new-password" placeholder="' + (existente ? "Sin cambio" : "Mínimo 6") + '"></label>' +
+      '<button type="button" class="btn btn-peligro" data-accion="quitar-org">Quitar</button></div>';
+  }
+
+  function enlaceOrganizador(eventoId, usuario) {
+    var base = location.href.split("#")[0].split("?")[0];
+    return base + "#/evento/" + encodeURIComponent(eventoId) + "?ref=" + encodeURIComponent(usuario);
+  }
+
+  function leerRefDeHash() {
+    var hash = location.hash || "";
+    var q = hash.indexOf("?");
+    var texto = q >= 0 ? hash.slice(q + 1) : String(location.search || "").replace(/^\?/, "");
+    if (!texto) return "";
+    var partes = texto.split("&");
+    for (var i = 0; i < partes.length; i++) {
+      var par = partes[i].split("=");
+      if (decodeURIComponent(par[0] || "") === "ref") return decodeURIComponent(par[1] || "").trim().toLowerCase();
+    }
+    return "";
+  }
+
   function nombreSitio() {
     return window.APP_CONFIG.NOMBRE_SITIO || "Portal de Capacitaciones";
   }
 
   function parseRuta() {
-    var hash = decodeURIComponent(location.hash || "#/");
+    var crudo = location.hash || "#/";
+    var sinQuery = crudo.split("?")[0];
+    var hash = decodeURIComponent(sinQuery);
     var partes = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
     return {
       nombre: partes[0] || "inicio",
       a: partes[1] || "",
       b: partes[2] || "",
-      clave: hash || "#/"
+      clave: sinQuery || "#/"
     };
   }
 
@@ -345,6 +388,8 @@
       return marco('<a class="volver" href="#/">← Todos los eventos</a><div class="vacio"><h1>No encontramos ese evento</h1><p>' + escapar(error.message) + "</p></div>");
     }
     document.title = evento.titulo + " · " + nombreSitio();
+    var ref = leerRefDeHash();
+    if (ref) estado.refOrganizador = ref;
     var lleno = evento.cupo && Number(evento.inscritos || 0) >= Number(evento.cupo);
     var enlace = urlSegura(evento.enlace);
     var quedan = evento.cupo ? Math.max(0, Number(evento.cupo) - Number(evento.inscritos || 0)) : null;
@@ -378,8 +423,9 @@
     } else {
       var notaCupo = "Sin límite de cupo.";
       if (quedan != null) notaCupo = muestraConteo(evento) ? quedan + " cupos libres." : "Inscripciones abiertas.";
-      ficha += "<h2>Inscribirme</h2><p class=\"nota\">" + notaCupo + "</p>" +
+      ficha += "<h2>Inscribirme</h2><p class=\"nota\">" + notaCupo + (estado.refOrganizador ? " Inscripción vinculada a " + escapar(estado.refOrganizador) + "." : "") + "</p>" +
         '<form id="form-inscripcion" method="post" action="#/"><input type="hidden" name="eventoId" value="' + escapar(evento.id) + '">' +
+        '<input type="hidden" name="organizadorUsuario" value="' + escapar(estado.refOrganizador || "") + '">' +
         '<div class="campo" style="margin-top:12px"><span>Nombres</span><input name="nombres" aria-label="Nombres" required maxlength="80" autocomplete="given-name"></div>' +
         '<div class="campo" style="margin-top:10px"><span>Apellidos</span><input name="apellidos" aria-label="Apellidos" required maxlength="80" autocomplete="family-name"></div>' +
         '<div class="campo" style="margin-top:10px"><span>DNI</span><input name="dni" aria-label="DNI" required inputmode="numeric" maxlength="8" pattern="[0-9]{8}" autocomplete="off" placeholder="8 números"></div>' +
@@ -410,7 +456,11 @@
     document.title = "Administrar · " + nombreSitio();
     var eventos = ordenarEventos(await window.API.eventosAdmin());
     var filas = eventos.length ? eventos.map(function (evento) {
-      return '<article class="fila-evento"><div><div class="pills"><span class="pill ' + (evento.activo ? "pill-ok" : "pill-off") + '">' + (evento.activo ? "Abierto" : "Pausado") + "</span><span class=\"pill\">" + escapar(evento.tipo) + '</span></div><h2>' + escapar(evento.titulo) + "</h2><p class=\"meta\">" + escapar(evento.organizacion) + " · " + escapar(formatoFecha(evento.fecha)) + " · " + (evento.inscritos || 0) + " inscritos · " + (evento.pagados || 0) + " pagaron · " + (evento.organizadorUsuario ? "Usuario " + escapar(evento.organizadorUsuario) : "Sin usuario de organizador") + "</p></div><div class=\"acciones\"><a class=\"btn btn-secundario\" href=\"#/admin/inscritos/" + escapar(evento.id) + "\">Inscritos</a><a class=\"btn btn-secundario\" href=\"#/admin/editar/" + escapar(evento.id) + "\">Editar</a><button type=\"button\" class=\"btn btn-peligro\" data-accion=\"activar\" data-id=\"" + escapar(evento.id) + "\" data-activo=\"" + (evento.activo ? "1" : "0") + "\">" + (evento.activo ? "Desactivar" : "Activar") + "</button></div></article>";
+      var orgs = organizadoresDe(evento);
+      var textoOrg = orgs.length
+        ? (orgs.length === 1 ? "Usuario " + orgs[0].usuario : orgs.length + " organizadores · " + orgs.map(function (item) { return item.usuario; }).join(", "))
+        : "Sin organizadores";
+      return '<article class="fila-evento"><div><div class="pills"><span class="pill ' + (evento.activo ? "pill-ok" : "pill-off") + '">' + (evento.activo ? "Abierto" : "Pausado") + "</span><span class=\"pill\">" + escapar(evento.tipo) + '</span></div><h2>' + escapar(evento.titulo) + "</h2><p class=\"meta\">" + escapar(evento.organizacion) + " · " + escapar(formatoFecha(evento.fecha)) + " · " + (evento.inscritos || 0) + " inscritos · " + (evento.pagados || 0) + " pagaron · " + escapar(textoOrg) + "</p></div><div class=\"acciones\"><a class=\"btn btn-secundario\" href=\"#/admin/inscritos/" + escapar(evento.id) + "\">Inscritos</a><a class=\"btn btn-secundario\" href=\"#/admin/editar/" + escapar(evento.id) + "\">Editar</a><button type=\"button\" class=\"btn btn-peligro\" data-accion=\"activar\" data-id=\"" + escapar(evento.id) + "\" data-activo=\"" + (evento.activo ? "1" : "0") + "\">" + (evento.activo ? "Desactivar" : "Activar") + "</button></div></article>";
     }).join("") : '<div class="vacio"><h2>Todavía no hay eventos</h2><p>Crea el primero y asigna el usuario de su organizador.</p></div>';
     return marco('<div class="subnav"><a class="btn btn-primario" href="#/admin" aria-current="page">Eventos</a><a class="btn btn-secundario" href="#/admin/nuevo">Nuevo evento</a></div><div class="encabezado-pagina"><h1>Eventos</h1><p>Activa, pausa o abre la lista. Al pausar un evento deja de aparecer en la programación y no acepta inscripciones.</p></div>' + filas);
   }
@@ -428,7 +478,7 @@
     var evento = {
       id: "", titulo: "", organizacion: "", tipo: "Curso", descripcion: "", fecha: "", hora: "", lugar: "",
       modalidad: "presencial", enlace: "", cupo: "", tarifas: [{ nombre: "Profesional", precio: "" }, { nombre: "Estudiante", precio: "" }],
-      mostrarInscritos: true, requisitos: "", contacto: "", imagen: "", activo: true, organizadorUsuario: "", organizadorNombre: ""
+      mostrarInscritos: true, requisitos: "", contacto: "", imagen: "", activo: true, organizadores: [{ usuario: "", nombre: "", existente: false }]
     };
     if (id) {
       var detalle = await window.API.detalleAdmin(id);
@@ -437,13 +487,18 @@
     var tarifasForm = tarifasDe(evento);
     if (!tarifasForm.length) tarifasForm = [{ nombre: "", precio: "" }];
     var filasTarifa = tarifasForm.map(htmlFilaTarifa).join("");
+    var orgsForm = organizadoresDe(evento);
+    if (!orgsForm.length) orgsForm = [{ usuario: "", nombre: "", existente: false }];
+    else orgsForm = orgsForm.map(function (item) {
+      return { usuario: item.usuario, nombre: item.nombre || "", existente: true, id: item.id || "" };
+    });
+    var filasOrg = orgsForm.map(htmlFilaOrganizador).join("");
+    var enlaces = id ? orgsForm.filter(function (item) { return item.usuario; }).map(function (item) {
+      return '<p class="nota">Enlace de <strong>' + escapar(item.usuario) + '</strong>: <code class="enlace-ref">' + escapar(enlaceOrganizador(id, item.usuario)) + "</code></p>";
+    }).join("") : "";
     document.title = (id ? "Editar evento" : "Nuevo evento") + " · " + nombreSitio();
-    var usuarioNuevo = !evento.organizadorUsuario;
-    var usuarioCampo = usuarioNuevo
-      ? '<div class="campo"><span>Usuario del organizador</span><input name="organizadorUsuario" aria-label="Usuario del organizador" maxlength="20" autocomplete="off" placeholder="ej. lima.cursos"' + (id ? "" : " required") + "></div>"
-      : '<input type="hidden" name="organizadorUsuario" value="' + escapar(evento.organizadorUsuario) + '"><p class="nota">Usuario del organizador: <strong>' + escapar(evento.organizadorUsuario) + "</strong>. La clave solo se cambia si escribes una nueva.</p>";
     return marco('<div class="subnav"><a class="btn btn-secundario" href="#/admin">Eventos</a><a class="btn btn-primario" href="#/admin/nuevo">Nuevo evento</a></div>' +
-      '<form id="form-evento" method="post" action="#/admin/nuevo" class="form-pagina" data-nuevo="' + (id ? "0" : "1") + '" data-usuario-nuevo="' + (usuarioNuevo ? "1" : "0") + '">' +
+      '<form id="form-evento" method="post" action="#/admin/nuevo" class="form-pagina" data-nuevo="' + (id ? "0" : "1") + '">' +
       '<input type="hidden" name="eventoId" value="' + escapar(evento.id) + '">' +
       '<section class="bloque"><h2>' + (id ? "Editar evento" : "Nuevo evento") + "</h2>" +
       '<div class="campo campo-ancho"><span>Título</span><input name="titulo" aria-label="Título" required maxlength="140" value="' + escapar(evento.titulo) + '"></div>' +
@@ -462,10 +517,9 @@
       '<div class="campo campo-ancho"><span>Requisitos</span><textarea name="requisitos" maxlength="2000">' + escapar(evento.requisitos || "") + "</textarea></div>" +
       '<label class="check"><input type="checkbox" name="mostrarInscritos"' + (evento.mostrarInscritos !== false ? " checked" : "") + "> Mostrar cuántos inscritos hay en la página pública</label>" +
       '<label class="check"><input type="checkbox" name="activo"' + (evento.activo ? " checked" : "") + "> Inscripciones abiertas</label></section>" +
-      '<section class="bloque"><h2>Acceso del organizador</h2><p class="nota">Esta persona entra por el botón Entrar y solo ve las inscripciones de este evento. Entrégale el usuario y la clave por un canal aparte: la clave no se vuelve a mostrar.</p>' +
-      usuarioCampo +
-      '<div class="campo"><span>Nombre del organizador</span><input name="organizadorNombre" aria-label="Nombre del organizador" maxlength="80" value="' + escapar(evento.organizadorNombre || "") + '"></div>' +
-      '<div class="campo"><span>' + (usuarioNuevo ? "Clave del organizador" : "Nueva clave (opcional)") + '</span><input name="organizadorClave" aria-label="Clave del organizador" type="password" minlength="6" autocomplete="new-password"></div>' +
+      '<section class="bloque"><h2>Organizadores</h2><p class="nota">Puedes crear varios. Cada uno entra con su usuario, ve sus propios inscritos y también el total del evento. Entrégale a cada uno su enlace personal (con <code>?ref=</code>) para que las inscripciones cuenten en su métrica. La clave no se vuelve a mostrar.</p>' +
+      '<div id="lista-orgs">' + filasOrg + '</div><button type="button" class="btn btn-secundario" data-accion="agregar-org">Agregar organizador</button>' +
+      enlaces +
       '<div class="acciones-form"><button class="btn btn-primario" type="submit">' + (id ? "Guardar cambios" : "Crear evento") + "</button></div></section></form>");
   }
 
@@ -497,13 +551,14 @@
     });
   }
 
-  function htmlFilasInscritos() {
+  function htmlFilasInscritos(mostrarOrg) {
     var lista = listaFiltrada();
+    var cols = mostrarOrg ? 9 : 8;
     if (!estado.listaInscritos.length) {
-      return '<tr><td colspan="8">Todavía no hay inscripciones.</td></tr>';
+      return '<tr><td colspan="' + cols + '">Todavía no hay inscripciones.</td></tr>';
     }
     if (!lista.length) {
-      return '<tr><td colspan="8">No hay inscripciones con ese criterio.</td></tr>';
+      return '<tr><td colspan="' + cols + '">No hay inscripciones con ese criterio.</td></tr>';
     }
     return lista.map(function (item) {
       var pago = item.pagado
@@ -511,38 +566,63 @@
         : '<span class="pill pill-aviso">Pendiente</span>';
       var whatsapp = String(item.whatsapp || "");
       var enlaceWhatsapp = whatsapp.length === 9 ? "51" + whatsapp : whatsapp;
-      return "<tr><td data-label=\"Folio\">" + escapar(item.id) + "</td><td data-label=\"Nombre\">" + escapar(item.nombres + " " + item.apellidos) + "</td><td data-label=\"DNI\">" + escapar(item.dni) + "</td><td data-label=\"Correo\">" + escapar(item.correo) + "</td><td data-label=\"Categoría\">" + escapar(nombreCategoria(item.categoria)) + "</td><td data-label=\"WhatsApp\">" + escapar(item.whatsapp) + ' · <a href="https://wa.me/' + escapar(enlaceWhatsapp) + '" target="_blank" rel="noopener noreferrer">Escribir</a></td><td data-label=\"Pago\">' + pago + '</td><td data-label="Acciones"><button type="button" class="btn btn-secundario" data-accion="pagado" data-id="' + escapar(item.id) + '" data-pagado="' + (item.pagado ? "1" : "0") + '">' + (item.pagado ? "Marcar pendiente" : "Marcar pagado") + '</button> <button type="button" class="btn btn-peligro" data-accion="anular" data-id="' + escapar(item.id) + '">Anular</button></td></tr>';
+      var org = item.organizadorUsuario || item.organizadorNombre || "Sin atribución";
+      return "<tr><td data-label=\"Folio\">" + escapar(item.id) + "</td><td data-label=\"Nombre\">" + escapar(item.nombres + " " + item.apellidos) + "</td><td data-label=\"DNI\">" + escapar(item.dni) + "</td><td data-label=\"Correo\">" + escapar(item.correo) + "</td><td data-label=\"Categoría\">" + escapar(nombreCategoria(item.categoria)) + "</td>" +
+        (mostrarOrg ? '<td data-label="Organizador">' + escapar(org) + "</td>" : "") +
+        '<td data-label="WhatsApp">' + escapar(item.whatsapp) + ' · <a href="https://wa.me/' + escapar(enlaceWhatsapp) + '" target="_blank" rel="noopener noreferrer">Escribir</a></td><td data-label="Pago">' + pago + '</td><td data-label="Acciones"><button type="button" class="btn btn-secundario" data-accion="pagado" data-id="' + escapar(item.id) + '" data-pagado="' + (item.pagado ? "1" : "0") + '">' + (item.pagado ? "Marcar pendiente" : "Marcar pagado") + '</button> <button type="button" class="btn btn-peligro" data-accion="anular" data-id="' + escapar(item.id) + '">Anular</button></td></tr>';
     }).join("");
   }
 
   function pintarCuerpoTabla() {
     var cuerpo = document.getElementById("cuerpo-inscritos");
-    if (cuerpo) cuerpo.innerHTML = htmlFilasInscritos();
+    var mostrarOrg = !!(estado.sesion && estado.sesion.rol === "admin") ||
+      (estado.sesion && estado.sesion.rol === "organizador" && estado.vistaInscritos === "todos");
+    if (cuerpo) cuerpo.innerHTML = htmlFilasInscritos(mostrarOrg);
     document.querySelectorAll("[data-accion='filtro-pago']").forEach(function (boton) {
       boton.setAttribute("aria-pressed", boton.dataset.pago === estado.filtroPago ? "true" : "false");
     });
   }
 
-  function htmlPanelInscritos(evento, lista, volver) {
+  function htmlPanelInscritos(evento, lista, opciones) {
+    opciones = opciones || {};
     estado.listaInscritos = lista;
     estado.eventoActual = evento;
     var cifras = resumen(lista);
+    var mostrarOrg = !!opciones.mostrarOrg;
+    var esOrg = estado.sesion && estado.sesion.rol === "organizador";
     var filtros = [["todos", "Todos"], ["pagados", "Pagaron"], ["pendientes", "Pendientes"]].map(function (par) {
       return '<button type="button" class="chip" data-accion="filtro-pago" data-pago="' + par[0] + '" aria-pressed="' + (estado.filtroPago === par[0] ? "true" : "false") + '">' + par[1] + "</button>";
     }).join("");
-    return (volver || "") +
-      '<div class="encabezado-pagina"><div class="pills"><span class="pill ' + (evento.activo ? "pill-ok" : "pill-off") + '">' + (evento.activo ? "Inscripciones abiertas" : "Inscripciones pausadas") + '</span></div><h1>' + escapar(evento.titulo) + "</h1><p>" + escapar(evento.organizacion) + " · " + escapar(formatoFecha(evento.fecha)) + (evento.organizadorUsuario ? " · Organizador: " + escapar(evento.organizadorUsuario) : "") + "</p></div>" +
-      '<section class="stats"><article class="stat"><span>Inscritos</span><strong>' + cifras.total + '</strong></article><article class="stat"><span>Pagaron</span><strong>' + cifras.pagados + '</strong></article><article class="stat"><span>Pendientes</span><strong>' + cifras.pendientes + '</strong></article><article class="stat stat-tarifas"><span>Por tarifa</span><strong>' + escapar(cifras.porTarifa) + "</strong></article></section>" +
-      (!evento.activo && estado.sesion && estado.sesion.rol === "organizador" ? '<p class="nota">El administrador pausó las inscripciones. Igual puedes revisar la lista y actualizar los pagos.</p>' : "") +
+    var vistas = "";
+    var statsExtra = "";
+    var enlaceMio = "";
+    if (esOrg && opciones.totales) {
+      vistas = '<div class="chips" style="margin:10px 0 0"><button type="button" class="chip" data-accion="vista-inscritos" data-vista="mios" aria-pressed="' + (estado.vistaInscritos === "mios" ? "true" : "false") + '">Mis inscritos</button><button type="button" class="chip" data-accion="vista-inscritos" data-vista="todos" aria-pressed="' + (estado.vistaInscritos === "todos" ? "true" : "false") + '">Total del evento</button></div>';
+      statsExtra = '<article class="stat"><span>Total del evento</span><strong>' + (opciones.totales.inscritos || 0) + '</strong></article><article class="stat"><span>Mis inscritos</span><strong>' + (opciones.totales.mios || 0) + "</strong></article>";
+      if (estado.sesion.usuario && evento.id) {
+        enlaceMio = '<div class="bloque" style="margin-top:12px;padding:14px"><p class="nota" style="margin:0 0 6px">Tu enlace personal para métricas. Quien se inscriba por aquí cuenta como tuyo:</p><code class="enlace-ref">' + escapar(enlaceOrganizador(evento.id, estado.sesion.usuario)) + '</code> <button type="button" class="btn btn-secundario" data-accion="copiar-enlace" data-enlace="' + escapar(enlaceOrganizador(evento.id, estado.sesion.usuario)) + '">Copiar</button></div>';
+      }
+    }
+    var cabeceras = "<th>Folio</th><th>Nombre</th><th>DNI</th><th>Correo</th><th>Categoría</th>" +
+      (mostrarOrg ? "<th>Organizador</th>" : "") +
+      "<th>WhatsApp</th><th>Pago</th><th>Acciones</th>";
+    return (opciones.volver || "") +
+      '<div class="encabezado-pagina"><div class="pills"><span class="pill ' + (evento.activo ? "pill-ok" : "pill-off") + '">' + (evento.activo ? "Inscripciones abiertas" : "Inscripciones pausadas") + '</span></div><h1>' + escapar(evento.titulo) + "</h1><p>" + escapar(evento.organizacion) + " · " + escapar(formatoFecha(evento.fecha)) + (esOrg && estado.sesion.usuario ? " · Tú: " + escapar(estado.sesion.usuario) : "") + "</p>" + vistas + "</div>" +
+      '<section class="stats">' + (statsExtra || "") + '<article class="stat"><span>' + (esOrg && estado.vistaInscritos === "mios" ? "En esta lista" : "Inscritos") + '</span><strong>' + cifras.total + '</strong></article><article class="stat"><span>Pagaron</span><strong>' + cifras.pagados + '</strong></article><article class="stat"><span>Pendientes</span><strong>' + cifras.pendientes + '</strong></article><article class="stat stat-tarifas"><span>Por tarifa</span><strong>' + escapar(cifras.porTarifa) + "</strong></article></section>" +
+      enlaceMio +
+      (!evento.activo && esOrg ? '<p class="nota">El administrador pausó las inscripciones. Igual puedes revisar la lista y actualizar los pagos.</p>' : "") +
       '<div class="barra-lista"><input id="buscar-inscritos" class="buscador" style="max-width:360px" type="search" placeholder="Buscar nombre, DNI o correo" value="' + escapar(estado.buscaInscritos) + '" aria-label="Buscar inscritos"><div class="acciones">' + filtros + '<button type="button" class="btn btn-secundario" data-accion="excel">Descargar Excel</button></div></div>' +
-      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Folio</th><th>Nombre</th><th>DNI</th><th>Correo</th><th>Categoría</th><th>WhatsApp</th><th>Pago</th><th>Acciones</th></tr></thead><tbody id="cuerpo-inscritos">' + htmlFilasInscritos() + "</tbody></table></div>";
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr>' + cabeceras + '</tr></thead><tbody id="cuerpo-inscritos">' + htmlFilasInscritos(mostrarOrg) + "</tbody></table></div>";
   }
 
   async function vistaInscritosAdmin(id) {
     if (!exigirRol("admin")) return vistaEntrar();
     var detalle = await window.API.detalleAdmin(id);
     document.title = "Inscritos · " + detalle.evento.titulo;
-    return marco(htmlPanelInscritos(detalle.evento, detalle.inscripciones, '<div class="subnav"><a class="btn btn-secundario" href="#/admin">Eventos</a><a class="btn btn-secundario" href="#/admin/editar/' + escapar(id) + '">Editar</a><a class="btn btn-secundario" href="#/evento/' + escapar(id) + '">Ver ficha pública</a></div>'));
+    return marco(htmlPanelInscritos(detalle.evento, detalle.inscripciones, {
+      volver: '<div class="subnav"><a class="btn btn-secundario" href="#/admin">Eventos</a><a class="btn btn-secundario" href="#/admin/editar/' + escapar(id) + '">Editar</a><a class="btn btn-secundario" href="#/evento/' + escapar(id) + '">Ver ficha pública</a></div>',
+      mostrarOrg: true
+    }));
   }
 
   async function vistaPanel() {
@@ -556,7 +636,15 @@
     if (!panel.evento) {
       return marco('<div class="vacio"><h1>Tu usuario no tiene un evento</h1><p>Pide al administrador que te asigne el evento otra vez.</p></div>');
     }
-    return marco(htmlPanelInscritos(panel.evento, panel.inscripciones, ""));
+    estado.listaTodas = panel.inscripciones || [];
+    var mias = panel.misInscripciones || estado.listaTodas.filter(function (item) {
+      return String(item.organizadorUsuario || "").toLowerCase() === String(estado.sesion.usuario || "").toLowerCase();
+    });
+    var lista = estado.vistaInscritos === "todos" ? estado.listaTodas : mias;
+    return marco(htmlPanelInscritos(panel.evento, lista, {
+      totales: panel.totales || { inscritos: estado.listaTodas.length, mios: mias.length, pagados: 0 },
+      mostrarOrg: estado.vistaInscritos === "todos"
+    }));
   }
 
   function vistaCuenta() {
@@ -596,6 +684,8 @@
       estado.rutaClave = ruta.clave;
       estado.buscaInscritos = "";
       estado.filtroPago = "todos";
+      if (ruta.nombre !== "panel") estado.vistaInscritos = "mios";
+      if (ruta.nombre !== "evento") estado.refOrganizador = "";
     }
     var html;
     try {
@@ -635,9 +725,26 @@
     });
   }
 
+  function leerOrganizadores(form) {
+    var filas = form.querySelectorAll(".fila-org");
+    var lista = [];
+    for (var i = 0; i < filas.length && lista.length < 10; i++) {
+      lista.push({
+        usuario: filas[i].querySelector("[name='orgUsuario']").value,
+        nombre: filas[i].querySelector("[name='orgNombre']").value,
+        clave: filas[i].querySelector("[name='orgClave']").value,
+        existente: filas[i].dataset.existente === "1"
+      });
+    }
+    return lista.filter(function (item) {
+      return String(item.usuario || "").trim() || String(item.nombre || "").trim() || String(item.clave || "").trim();
+    });
+  }
+
   function leerEvento(form) {
     var datos = new FormData(form);
     var tarifas = leerTarifas(form);
+    var organizadores = leerOrganizadores(form);
     return {
       id: datos.get("eventoId") || "",
       titulo: datos.get("titulo"),
@@ -658,9 +765,10 @@
       activo: form.activo.checked,
       mostrarInscritos: form.mostrarInscritos.checked,
       tarifas: tarifas,
-      organizadorUsuario: datos.get("organizadorUsuario"),
-      organizadorNombre: datos.get("organizadorNombre"),
-      organizadorClave: datos.get("organizadorClave")
+      organizadores: organizadores,
+      organizadorUsuario: organizadores[0] ? organizadores[0].usuario : "",
+      organizadorNombre: organizadores[0] ? organizadores[0].nombre : "",
+      organizadorClave: organizadores[0] ? organizadores[0].clave : ""
     };
   }
 
@@ -675,9 +783,9 @@
   function descargarExcel() {
     var evento = estado.eventoActual;
     if (!evento) return;
-    var filas = [["Folio", "Nombres", "Apellidos", "DNI", "Correo", "Categoría", "WhatsApp", "Pagado", "Fecha"]];
+    var filas = [["Folio", "Nombres", "Apellidos", "DNI", "Correo", "Categoría", "Organizador", "WhatsApp", "Pagado", "Fecha"]];
     estado.listaInscritos.forEach(function (item) {
-      filas.push([item.id, item.nombres, item.apellidos, item.dni, item.correo, nombreCategoria(item.categoria), item.whatsapp, item.pagado ? "SI" : "NO", item.fecha]);
+      filas.push([item.id, item.nombres, item.apellidos, item.dni, item.correo, nombreCategoria(item.categoria), item.organizadorUsuario || "", item.whatsapp, item.pagado ? "SI" : "NO", item.fecha]);
     });
     var libro = '<?xml version="1.0" encoding="UTF-8"?>' +
       '<?mso-application progid="Excel.Sheet"?>' +
@@ -707,7 +815,8 @@
         dni: datos.get("dni"),
         correo: datos.get("correo"),
         categoria: datos.get("categoria") || "",
-        whatsapp: datos.get("whatsapp")
+        whatsapp: datos.get("whatsapp"),
+        organizadorUsuario: datos.get("organizadorUsuario") || estado.refOrganizador || ""
       };
       var mensaje = window.Validar.inscripcion(inscripcion);
       if (mensaje) { ponerError(form, mensaje); return; }
@@ -739,8 +848,7 @@
     if (formId === "form-evento") {
       var entrada = leerEvento(form);
       var errorEvento = window.Validar.evento(entrada, {
-        exigirOrganizador: form.dataset.nuevo === "1",
-        usuarioNuevo: form.dataset.usuarioNuevo === "1"
+        exigirOrganizador: form.dataset.nuevo === "1"
       });
       if (errorEvento) { ponerError(form, errorEvento); return; }
       var botonEvento = form.querySelector('[type="submit"]');
@@ -802,6 +910,41 @@
       var fila = boton.closest(".fila-tarifa");
       if (!grupo || !fila || grupo.querySelectorAll(".fila-tarifa").length <= 1) return;
       fila.remove();
+      return;
+    }
+    if (accion === "agregar-org") {
+      var listaOrgs = document.getElementById("lista-orgs");
+      if (!listaOrgs || listaOrgs.querySelectorAll(".fila-org").length >= 10) {
+        avisar("Puedes agregar hasta 10 organizadores.", "mal");
+        return;
+      }
+      listaOrgs.insertAdjacentHTML("beforeend", htmlFilaOrganizador({ usuario: "", nombre: "", existente: false }));
+      return;
+    }
+    if (accion === "quitar-org") {
+      var grupoOrg = document.getElementById("lista-orgs");
+      var filaOrg = boton.closest(".fila-org");
+      if (!grupoOrg || !filaOrg || grupoOrg.querySelectorAll(".fila-org").length <= 1) {
+        avisar("Deja al menos un organizador, o desactívalo quitándolo al guardar si editas.", "mal");
+        return;
+      }
+      filaOrg.remove();
+      return;
+    }
+    if (accion === "vista-inscritos") {
+      estado.vistaInscritos = boton.dataset.vista || "mios";
+      render();
+      return;
+    }
+    if (accion === "copiar-enlace") {
+      var texto = boton.dataset.enlace || "";
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(texto).then(function () { avisar("Enlace copiado."); }).catch(function () {
+          window.prompt("Copia este enlace:", texto);
+        });
+      } else {
+        window.prompt("Copia este enlace:", texto);
+      }
       return;
     }
     if (accion === "tipo") {

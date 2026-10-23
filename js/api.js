@@ -1,6 +1,6 @@
 (function () {
   var CLAVE_SESION = "portal_sesion";
-  var CLAVE_DEMO = "portalCapacitacionesDemoV1";
+  var CLAVE_DEMO = "portalCapacitacionesDemoV2";
   var HORAS = 12;
 
   function leerSesion() {
@@ -135,7 +135,8 @@
         folio: 2,
         usuarios: [
           { id: "USR-admin", usuario: "admin", clave: "admin123", rol: "admin", eventoId: "", nombre: "Administrador", activo: true },
-          { id: "USR-lima", usuario: "lima.cursos", clave: "evento123", rol: "organizador", eventoId: "EVT-gestion1", nombre: "María Delgado", activo: true }
+          { id: "USR-lima", usuario: "lima.cursos", clave: "evento123", rol: "organizador", eventoId: "EVT-gestion1", nombre: "María Delgado", activo: true },
+          { id: "USR-norte", usuario: "lima.norte", clave: "evento123", rol: "organizador", eventoId: "EVT-gestion1", nombre: "Carlos Núñez", activo: true }
         ],
         eventos: [
           {
@@ -158,7 +159,11 @@
             activo: true,
             creadoEn: "2026-10-01 10:00:00",
             organizadorUsuario: "lima.cursos",
-            organizadorNombre: "María Delgado"
+            organizadorNombre: "María Delgado",
+            organizadores: [
+              { id: "USR-lima", usuario: "lima.cursos", nombre: "María Delgado", activo: true },
+              { id: "USR-norte", usuario: "lima.norte", nombre: "Carlos Núñez", activo: true }
+            ]
           },
           {
             id: "EVT-auxilios",
@@ -206,8 +211,8 @@
           }
         ],
         inscripciones: [
-          { id: "INS-0001", eventoId: "EVT-gestion1", nombres: "Ana Lucía", apellidos: "Quispe", dni: "45678912", correo: "ana.quispe@correo.ejemplo", categoria: "profesional", whatsapp: "51987654321", pagado: true, fecha: "2026-10-10 09:15:00" },
-          { id: "INS-0002", eventoId: "EVT-gestion1", nombres: "Luis Fernando", apellidos: "Rojas", dni: "40111222", correo: "luis.rojas@correo.ejemplo", categoria: "estudiante", whatsapp: "51912345678", pagado: false, fecha: "2026-10-12 16:40:00" }
+          { id: "INS-0001", eventoId: "EVT-gestion1", nombres: "Ana Lucía", apellidos: "Quispe", dni: "45678912", correo: "ana.quispe@correo.ejemplo", categoria: "Profesional", whatsapp: "987654321", pagado: true, fecha: "2026-10-10 09:15:00", organizadorId: "USR-lima", organizadorUsuario: "lima.cursos", organizadorNombre: "María Delgado" },
+          { id: "INS-0002", eventoId: "EVT-gestion1", nombres: "Luis Fernando", apellidos: "Rojas", dni: "40111222", correo: "luis.rojas@correo.ejemplo", categoria: "Estudiante", whatsapp: "912345678", pagado: false, fecha: "2026-10-12 16:40:00", organizadorId: "USR-norte", organizadorUsuario: "lima.norte", organizadorNombre: "Carlos Núñez" }
         ],
         sesiones: []
       };
@@ -271,11 +276,21 @@
       };
     }
 
+    function organizadoresEvento(evento, data) {
+      if (evento.organizadores && evento.organizadores.length) return evento.organizadores.slice();
+      return data.usuarios.filter(function (item) {
+        return item.rol === "organizador" && item.eventoId === evento.id && item.activo;
+      }).map(function (item) {
+        return { id: item.id, usuario: item.usuario, nombre: item.nombre, activo: true };
+      });
+    }
+
     function completo(evento, data) {
       var base = publico(evento, data);
       base.pagados = contar(data, evento.id).pagados;
-      base.organizadorUsuario = evento.organizadorUsuario || "";
-      base.organizadorNombre = evento.organizadorNombre || "";
+      base.organizadores = organizadoresEvento(evento, data);
+      base.organizadorUsuario = base.organizadores[0] ? base.organizadores[0].usuario : (evento.organizadorUsuario || "");
+      base.organizadorNombre = base.organizadores[0] ? base.organizadores[0].nombre : (evento.organizadorNombre || "");
       return base;
     }
 
@@ -314,6 +329,14 @@
         contacto: window.Validar.limpio(datos.contacto),
         imagen: window.Validar.limpio(datos.imagen),
         activo: Boolean(datos.activo),
+        organizadores: Array.isArray(datos.organizadores) ? datos.organizadores.slice(0, 10).map(function (item) {
+          return {
+            usuario: window.Validar.limpio(item && item.usuario).toLowerCase(),
+            nombre: window.Validar.limpio(item && item.nombre),
+            clave: String((item && item.clave) || ""),
+            existente: Boolean(item && item.existente)
+          };
+        }).filter(function (item) { return item.usuario || item.nombre || item.clave; }) : [],
         organizadorUsuario: window.Validar.limpio(datos.organizadorUsuario).toLowerCase(),
         organizadorNombre: window.Validar.limpio(datos.organizadorNombre),
         organizadorClave: String(datos.organizadorClave || "")
@@ -367,6 +390,14 @@
         if (nombresTarifa.length && nombresTarifa.indexOf(window.Validar.limpio(datos.categoria)) === -1) {
           throw new Error("Elige una tarifa de este evento.");
         }
+        var ref = window.Validar.limpio(datos.organizadorUsuario || datos.ref).toLowerCase();
+        var orgRef = null;
+        if (ref) {
+          orgRef = data.usuarios.find(function (item) {
+            return item.rol === "organizador" && item.eventoId === evento.id && item.activo && item.usuario === ref;
+          });
+          if (!orgRef) throw new Error("Ese enlace de organizador no es válido para este evento.");
+        }
         data.folio = (data.folio || 0) + 1;
         var folio = String(data.folio);
         while (folio.length < 4) folio = "0" + folio;
@@ -380,7 +411,10 @@
           categoria: datos.categoria,
           whatsapp: window.Validar.soloDigitos(datos.whatsapp),
           pagado: false,
-          fecha: ahora()
+          fecha: ahora(),
+          organizadorId: orgRef ? orgRef.id : "",
+          organizadorUsuario: orgRef ? orgRef.usuario : "",
+          organizadorNombre: orgRef ? orgRef.nombre : ""
         };
         data.inscripciones.push(inscripcion);
         guardar(data);
@@ -438,32 +472,45 @@
         var esNuevo = !datos.id;
         var actual = esNuevo ? null : data.eventos.find(function (item) { return item.id === datos.id; });
         if (!esNuevo && !actual) throw new Error("No encontramos ese evento.");
-        var mensaje = window.Validar.evento(datos, {
-          exigirOrganizador: esNuevo,
-          usuarioNuevo: !actual || !actual.organizadorUsuario
-        });
+        if ((!datos.organizadores || !datos.organizadores.length) && datos.organizadorUsuario) {
+          datos.organizadores = [{
+            usuario: datos.organizadorUsuario,
+            nombre: datos.organizadorNombre,
+            clave: datos.organizadorClave || "",
+            existente: !esNuevo
+          }];
+        }
+        var mensaje = window.Validar.evento(datos, { exigirOrganizador: esNuevo });
         if (mensaje) throw new Error(mensaje);
         var entrada = normalizarEntrada(datos);
+        if (!entrada.organizadores.length && entrada.organizadorUsuario) {
+          entrada.organizadores = [{
+            usuario: entrada.organizadorUsuario,
+            nombre: entrada.organizadorNombre,
+            clave: entrada.organizadorClave,
+            existente: !esNuevo
+          }];
+        }
         if (datos.imagenArchivo) {
           var foto = String(datos.imagenArchivo).replace(/\s/g, "");
           if (foto.indexOf("/9j/") !== 0 || foto.length > 1800000) throw new Error("No se pudo usar esa foto.");
           entrada.imagen = "data:image/jpeg;base64," + foto;
         }
-        if (entrada.organizadorUsuario) {
-          var ocupado = data.usuarios.find(function (item) { return item.usuario === entrada.organizadorUsuario; });
-          if (ocupado && ocupado.rol === "admin") throw new Error("Ese usuario está reservado para el administrador.");
+        for (var i = 0; i < entrada.organizadores.length; i++) {
+          var org = entrada.organizadores[i];
+          var ocupado = data.usuarios.find(function (item) { return item.usuario === org.usuario; });
+          if (ocupado && ocupado.rol === "admin") throw new Error("El usuario " + org.usuario + " está reservado para el administrador.");
           if (ocupado && ocupado.eventoId && (!actual || ocupado.eventoId !== actual.id)) {
-            throw new Error("Ese usuario ya pertenece a otro evento.");
+            throw new Error("El usuario " + org.usuario + " ya pertenece a otro evento.");
           }
-          if (actual && actual.organizadorUsuario && actual.organizadorUsuario !== entrada.organizadorUsuario) {
-            throw new Error("Este evento ya tiene el usuario " + actual.organizadorUsuario + ". Puedes cambiarle la clave, no el usuario.");
-          }
+          if (!ocupado && org.clave.length < 6) throw new Error("La clave de " + org.usuario + " debe tener al menos 6 caracteres.");
         }
         var evento = actual || {
           id: nuevoId("EVT"),
           creadoEn: ahora(),
           organizadorUsuario: "",
-          organizadorNombre: ""
+          organizadorNombre: "",
+          organizadores: []
         };
         if (entrada.tarifas.length) {
           entrada.precioProfesional = entrada.tarifas[0].precio || "";
@@ -472,28 +519,38 @@
         ["titulo", "organizacion", "tipo", "descripcion", "fecha", "hora", "lugar", "modalidad", "enlace", "cupo", "precioProfesional", "precioEstudiante", "tarifas", "mostrarInscritos", "requisitos", "contacto", "imagen", "activo"].forEach(function (campo) {
           evento[campo] = entrada[campo];
         });
-        if (entrada.organizadorUsuario) {
-          var usuario = data.usuarios.find(function (item) { return item.usuario === entrada.organizadorUsuario; });
+        var activos = {};
+        entrada.organizadores.forEach(function (org) {
+          var usuario = data.usuarios.find(function (item) { return item.usuario === org.usuario; });
           if (!usuario) {
             usuario = {
               id: nuevoId("USR"),
-              usuario: entrada.organizadorUsuario,
-              clave: entrada.organizadorClave,
+              usuario: org.usuario,
+              clave: org.clave,
               rol: "organizador",
               eventoId: evento.id,
-              nombre: entrada.organizadorNombre,
+              nombre: org.nombre,
               activo: true
             };
             data.usuarios.push(usuario);
           } else {
-            usuario.nombre = entrada.organizadorNombre;
+            usuario.nombre = org.nombre;
             usuario.eventoId = evento.id;
             usuario.activo = true;
-            if (entrada.organizadorClave) usuario.clave = entrada.organizadorClave;
+            if (org.clave) usuario.clave = org.clave;
           }
-          evento.organizadorUsuario = usuario.usuario;
-          evento.organizadorNombre = usuario.nombre;
-        }
+          activos[usuario.usuario] = true;
+        });
+        data.usuarios.forEach(function (item) {
+          if (item.rol === "organizador" && item.eventoId === evento.id && !activos[item.usuario]) item.activo = false;
+        });
+        evento.organizadores = data.usuarios.filter(function (item) {
+          return item.rol === "organizador" && item.eventoId === evento.id && item.activo;
+        }).map(function (item) {
+          return { id: item.id, usuario: item.usuario, nombre: item.nombre, activo: true };
+        });
+        evento.organizadorUsuario = evento.organizadores[0] ? evento.organizadores[0].usuario : "";
+        evento.organizadorNombre = evento.organizadores[0] ? evento.organizadores[0].nombre : "";
         if (!actual) data.eventos.push(evento);
         guardar(data);
         return completo(evento, data);
@@ -511,12 +568,22 @@
         var usuario = exigir(["organizador"]);
         var data = cargar();
         var evento = data.eventos.find(function (item) { return item.id === usuario.eventoId; });
-        if (!evento) return { evento: null, inscripciones: [] };
+        if (!evento) return { evento: null, inscripciones: [], misInscripciones: [], totales: { inscritos: 0, pagados: 0, mios: 0 } };
+        var todas = data.inscripciones.filter(function (item) { return item.eventoId === evento.id; }).sort(function (a, b) {
+          return String(b.fecha).localeCompare(String(a.fecha));
+        });
+        var mias = todas.filter(function (item) {
+          return String(item.organizadorId) === String(usuario.id) || String(item.organizadorUsuario || "").toLowerCase() === String(usuario.usuario || "").toLowerCase();
+        });
         return {
           evento: completo(evento, data),
-          inscripciones: data.inscripciones.filter(function (item) { return item.eventoId === evento.id; }).sort(function (a, b) {
-            return String(b.fecha).localeCompare(String(a.fecha));
-          })
+          inscripciones: todas,
+          misInscripciones: mias,
+          totales: {
+            inscritos: todas.length,
+            pagados: todas.filter(function (item) { return item.pagado; }).length,
+            mios: mias.length
+          }
         };
       },
       marcarPago: async function (id, pagado) {
