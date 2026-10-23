@@ -63,6 +63,7 @@ function enrutar(body) {
   if (action === "anularInscripcion") return anularInscripcion(body);
   if (action === "cambiarClave") return cambiarClave(body);
   if (action === "brochurePublico") return brochurePublico(body);
+  if (action === "imagenesPublicas") return imagenesPublicas(body);
   return { ok: false, error: "Acción no reconocida." };
 }
 
@@ -542,7 +543,8 @@ function jsonEvento(evento, extra) {
     requisitos: evento.requisitos,
     contacto: evento.contacto,
     imagen: evento.imagen,
-    imagenUrl: imagenVisible(evento.imagen),
+    imagenUrl: extra.conImagen ? imagenVisible(evento.imagen) : "",
+    tieneImagen: !!evento.imagen,
     brochure: evento.brochure || "",
     tieneBrochure: !!evento.brochure,
     activo: evento.activo,
@@ -582,12 +584,30 @@ function eventosPublicos() {
   return { ok: true, eventos: lista };
 }
 
+function imagenesPublicas(body) {
+  var ids = body.ids || [];
+  if (ids.length > 24) ids = ids.slice(0, 24);
+  var pedidas = {};
+  for (var i = 0; i < ids.length; i++) pedidas[String(ids[i])] = true;
+  var filas = leerObjetos("Eventos");
+  var imagenes = {};
+  for (var r = 0; r < filas.length; r++) {
+    var id = String(filas[r].id);
+    if (!pedidas[id] || !esSi(filas[r].activo)) continue;
+    var url = imagenVisible(imagenGuardada(filas[r].imagen));
+    if (url) imagenes[id] = url;
+  }
+  return { ok: true, imagenes: imagenes };
+}
+
 function eventoPublico(body) {
   var filas = leerObjetos("Eventos");
   for (var i = 0; i < filas.length; i++) {
     if (String(filas[i].id) === String(body.id || "")) {
       var evento = normalizarEvento(filas[i]);
-      return { ok: true, evento: jsonEvento(evento, extraDe(evento, conteos(), false)) };
+      var extra = extraDe(evento, conteos(), false);
+      extra.conImagen = true;
+      return { ok: true, evento: jsonEvento(evento, extra) };
     }
   }
   return { ok: false, error: "No encontramos ese evento." };
@@ -817,9 +837,11 @@ function detalleAdmin(body) {
   exigir(body, ["admin"]);
   var evento = buscarEvento(body.id);
   if (!evento) return { ok: false, error: "No encontramos ese evento." };
+  var extra = extraDe(evento, conteos(), true);
+  extra.conImagen = true;
   return {
     ok: true,
-    evento: jsonEvento(evento, extraDe(evento, conteos(), true)),
+    evento: jsonEvento(evento, extra),
     inscripciones: inscripcionesDe(evento.id)
   };
 }

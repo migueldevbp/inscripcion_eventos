@@ -11,9 +11,23 @@
     listaInscritos: [],
     listaTodas: [],
     eventoActual: null,
-    refOrganizador: ""
+    refOrganizador: "",
+    fotos: {}
   };
   var renderSeq = 0;
+  var busquedaTimer = 0;
+
+  function iconoSvg(nombre) {
+    var icons = {
+      buscar: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+      rayo: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 10-14h-7l0-6z" fill="currentColor"/></svg>',
+      lista: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+      usuario: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 19c1.8-3.2 4.2-4.5 7-4.5S17.2 15.8 19 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+      check: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 12.5l2.5 2.5L16 9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      flecha: '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    };
+    return icons[nombre] || "";
+  }
 
   function escapar(valor) {
     return String(valor == null ? "" : valor)
@@ -35,7 +49,9 @@
   }
 
   function fotoVisible(evento) {
-    return urlSegura((evento && (evento.imagenUrl || evento.imagen)) || "");
+    if (!evento) return "";
+    if (estado.fotos[evento.id]) return urlSegura(estado.fotos[evento.id]);
+    return urlSegura(evento.imagenUrl || (String(evento.imagen || "").indexOf("data:image/") === 0 ? evento.imagen : "") || "");
   }
 
   function prepararPdf(archivo) {
@@ -348,24 +364,27 @@
     });
   }
 
-  function htmlTarjeta(evento) {
+  function htmlTarjeta(evento, indice) {
     var sello = fechaCorta(evento.fecha);
     var foto = fotoVisible(evento);
+    var esperaFoto = !foto && (evento.tieneImagen || evento.imagen);
     var lleno = evento.cupo && Number(evento.inscritos || 0) >= Number(evento.cupo);
     var cupo = evento.cupo ? (evento.inscritos || 0) + " de " + evento.cupo : (evento.inscritos || 0) + " inscritos";
     var pillConteo = "";
     if (muestraConteo(evento)) pillConteo = '<span class="pill">' + escapar(cupo) + "</span>";
     else if (lleno) pillConteo = '<span class="pill pill-off">Cupo lleno</span>';
-    return '<a class="tarjeta" href="#/evento/' + escapar(evento.id) + '">' +
-      '<div class="portada' + (foto ? "" : " sin-foto") + '"><span>' + escapar(evento.tipo) + "</span>" +
-      (foto ? '<img alt="" src="' + escapar(foto) + '" referrerpolicy="no-referrer">' : "") + "</div>" +
+    var retardo = Math.min(Number(indice) || 0, 8) * 45;
+    return '<a class="tarjeta" href="#/evento/' + escapar(evento.id) + '" style="--i:' + retardo + 'ms">' +
+      '<div class="portada' + (foto ? "" : " sin-foto") + (esperaFoto ? " foto-carga" : "") + '"><span class="etiqueta-tipo">' + escapar(evento.tipo) + "</span>" +
+      '<img alt="" data-evento-foto="' + escapar(evento.id) + '" src="' + (foto ? escapar(foto) : "") + '" loading="lazy" decoding="async" referrerpolicy="no-referrer"' + (foto ? "" : " hidden") + ">" +
+      "</div>" +
       '<div class="cuerpo-tarjeta"><div class="fila-sello"><div><p class="meta">' + escapar(evento.organizacion) + "</p><h2>" + escapar(evento.titulo) + "</h2></div>" +
       '<span class="sello"><span class="sello-mes">' + escapar(sello.mes) + '</span><span class="sello-dia">' + escapar(sello.dia) + "</span></span></div>" +
       '<p class="meta">' + escapar(modalidadNombre(evento.modalidad)) + (evento.lugar ? " · " + escapar(evento.lugar) : "") + "</p>" +
       '<div class="pills">' + pillConteo +
       (lleno && muestraConteo(evento) ? '<span class="pill pill-off">Cupo lleno</span>' : "") +
       (esPasado(evento.fecha) ? '<span class="pill pill-aviso">Fecha pasada</span>' : "") +
-      "</div></div></a>";
+      '</div><span class="tarjeta-cta">Ver evento ' + iconoSvg("flecha") + "</span></div></a>";
   }
 
   function htmlGrilla() {
@@ -374,12 +393,40 @@
       return '<div class="vacio"><h2>No hay eventos abiertos</h2><p>Cuando el administrador active uno, aparecerá aquí.</p></div>';
     }
     if (!lista.length) return '<div class="vacio"><h2>Ningún evento coincide</h2><p>Prueba con otra palabra o con otro tipo.</p></div>';
-    return lista.map(htmlTarjeta).join("");
+    return lista.map(function (evento, i) { return htmlTarjeta(evento, i); }).join("");
   }
 
   function pintarGrilla() {
     var grilla = document.getElementById("grilla");
     if (grilla) grilla.innerHTML = htmlGrilla();
+    cargarFotosGrilla();
+  }
+
+  async function cargarFotosGrilla() {
+    if (!window.API.imagenesPublicas) return;
+    var ids = estado.eventos.filter(function (evento) {
+      return (evento.tieneImagen || evento.imagen) && !estado.fotos[evento.id] && !evento.imagenUrl;
+    }).map(function (evento) { return evento.id; }).slice(0, 24);
+    if (!ids.length) return;
+    try {
+      var imagenes = await window.API.imagenesPublicas(ids);
+      Object.keys(imagenes || {}).forEach(function (id) {
+        if (!imagenes[id]) return;
+        estado.fotos[id] = imagenes[id];
+        var evento = estado.eventos.find(function (item) { return item.id === id; });
+        if (evento) evento.imagenUrl = imagenes[id];
+        var img = document.querySelector('[data-evento-foto="' + id.replace(/"/g, "") + '"]');
+        if (img) {
+          img.hidden = false;
+          img.src = imagenes[id];
+          if (img.parentElement) img.parentElement.classList.remove("sin-foto", "foto-carga");
+          img.classList.add("foto-lista");
+        }
+      });
+      document.querySelectorAll(".portada.foto-carga").forEach(function (nodo) {
+        if (!nodo.querySelector("img[src]:not([src=''])")) nodo.classList.remove("foto-carga");
+      });
+    } catch (error) { /* la grilla ya se ve sin fotos */ }
   }
 
   async function vistaInicio() {
@@ -389,15 +436,19 @@
     var tipos = ["Todos"].concat(window.Validar.TIPOS.filter(function (tipo) {
       return estado.eventos.some(function (evento) { return evento.tipo === tipo; });
     }));
-    var hero = '<div class="hero-franja"><section class="hero ancho"><div><p class="sobrelinea">Programación abierta</p><h1>Inscríbete a cursos y capacitaciones</h1><p class="lead">Entra a un evento, mira quién lo organiza y deja tus datos. Cada organización ve solo a sus inscritos y marca quién ya pagó.</p></div>' +
-      (proximo ? '<a class="proximo" href="#/evento/' + escapar(proximo.id) + '"><span>Próximo evento</span><strong>' + escapar(proximo.titulo) + "</strong><em>" + escapar(proximo.organizacion) + " · " + escapar(formatoFecha(proximo.fecha)) + "</em></a>" : "") +
+    var hero = '<div class="hero-franja"><div class="hero-fondo" aria-hidden="true"></div><section class="hero ancho"><div class="hero-copy anim-entrar"><p class="sobrelinea">' + iconoSvg("rayo") + ' Programación abierta</p><h1>Inscríbete a cursos y capacitaciones</h1><p class="lead">Elige un evento, deja tus datos y sigue el pago con la organización. Rápido, claro y listo para tu equipo.</p></div>' +
+      (proximo ? '<a class="proximo anim-entrar anim-delay" href="#/evento/' + escapar(proximo.id) + '"><span>Próximo evento</span><strong>' + escapar(proximo.titulo) + "</strong><em>" + escapar(proximo.organizacion) + " · " + escapar(formatoFecha(proximo.fecha)) + '</em><span class="proximo-cta">Abrir ficha ' + iconoSvg("flecha") + "</span></a>" : "") +
       "</section></div>";
     var chips = tipos.map(function (tipo) {
       return '<button type="button" class="chip" data-accion="tipo" data-tipo="' + escapar(tipo) + '" aria-pressed="' + (estado.tipo === tipo ? "true" : "false") + '">' + escapar(tipo) + "</button>";
     }).join("");
-    var cuerpo = '<div class="herramientas"><input id="buscar-eventos" class="buscador" type="search" placeholder="Buscar por curso, organización o lugar" value="' + escapar(estado.busqueda) + '" aria-label="Buscar eventos"><div class="chips">' + chips + "</div></div>" +
+    var cuerpo = '<div class="herramientas anim-entrar"><label class="buscador-wrap">' + iconoSvg("buscar") + '<input id="buscar-eventos" class="buscador" type="search" placeholder="Buscar por curso, organización o lugar" value="' + escapar(estado.busqueda) + '" aria-label="Buscar eventos"></label><div class="chips">' + chips + "</div></div>" +
       '<div id="grilla" class="grilla" aria-live="polite">' + htmlGrilla() + "</div>" +
-      '<section class="pasos"><article><strong>1. Elige el evento</strong><p>Revisa de qué trata, la fecha y la organización.</p></article><article><strong>2. Registra tus datos</strong><p>Nombre, DNI, correo, categoría y WhatsApp.</p></article><article><strong>3. Espera la confirmación</strong><p>La organización marca el pago y puede escribirte.</p></article></section>';
+      '<section class="pasos">' +
+      '<article class="anim-entrar"><span class="paso-icono" aria-hidden="true">' + iconoSvg("lista") + "</span><strong>1. Elige el evento</strong><p>Revisa de qué trata, la fecha y la organización.</p></article>" +
+      '<article class="anim-entrar anim-delay"><span class="paso-icono" aria-hidden="true">' + iconoSvg("usuario") + "</span><strong>2. Registra tus datos</strong><p>Nombre, DNI, correo, categoría y WhatsApp.</p></article>" +
+      '<article class="anim-entrar anim-delay-2"><span class="paso-icono" aria-hidden="true">' + iconoSvg("check") + "</span><strong>3. Espera la confirmación</strong><p>La organización marca el pago y puede escribirte.</p></article>" +
+      "</section>";
     return marco(cuerpo, hero);
   }
 
@@ -417,6 +468,7 @@
       return marco('<a class="volver" href="#/">← Todos los eventos</a><div class="vacio"><h1>No encontramos ese evento</h1><p>' + escapar(error.message) + "</p></div>");
     }
     document.title = evento.titulo + " · " + nombreSitio();
+    if (evento.imagenUrl) estado.fotos[evento.id] = evento.imagenUrl;
     var ref = leerRefDeHash();
     if (ref) estado.refOrganizador = ref;
     var lleno = evento.cupo && Number(evento.inscritos || 0) >= Number(evento.cupo);
@@ -719,6 +771,10 @@
       estado.filtroPago = "todos";
       if (ruta.nombre !== "panel") estado.vistaInscritos = "mios";
       if (ruta.nombre !== "evento") estado.refOrganizador = "";
+      var app = document.getElementById("app");
+      if (app && !app.querySelector(".esqueleto")) {
+        app.innerHTML = '<div class="esqueleto ancho" aria-busy="true"><div class="esqueleto-barra"></div><div class="esqueleto-hero"></div><div class="esqueleto-grilla"><span></span><span></span><span></span></div></div>';
+      }
     }
     var html;
     try {
@@ -742,6 +798,7 @@
         titulo.focus();
       }
     }
+    if (document.getElementById("grilla")) cargarFotosGrilla();
   }
 
   function leerTarifas(form) {
@@ -1099,7 +1156,8 @@
     }
     if (campo.id === "buscar-eventos") {
       estado.busqueda = evento.target.value;
-      pintarGrilla();
+      clearTimeout(busquedaTimer);
+      busquedaTimer = setTimeout(pintarGrilla, 120);
     }
     if (evento.target.id === "buscar-inscritos") {
       estado.buscaInscritos = evento.target.value;

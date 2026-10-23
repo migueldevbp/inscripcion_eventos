@@ -85,6 +85,9 @@
       eventosPublicos: async function () {
         return (await llamar("eventosPublicos")).eventos;
       },
+      imagenesPublicas: async function (ids) {
+        return (await llamar("imagenesPublicas", { ids: ids || [] })).imagenes || {};
+      },
       eventoPublico: async function (id) {
         return (await llamar("eventoPublico", { id: id })).evento;
       },
@@ -278,6 +281,8 @@
         requisitos: evento.requisitos,
         contacto: evento.contacto,
         imagen: evento.imagen,
+        imagenUrl: evento.imagenUrl || "",
+        tieneImagen: !!evento.imagen || !!evento.imagenUrl,
         brochure: evento.brochure || "",
         tieneBrochure: !!evento.brochure,
         activo: evento.activo,
@@ -368,14 +373,30 @@
       eventosPublicos: async function () {
         var data = cargar();
         return data.eventos.filter(function (evento) { return evento.activo; }).map(function (evento) {
-          return publico(evento, data);
+          var item = publico(evento, data);
+          item.imagenUrl = "";
+          return item;
         });
+      },
+      imagenesPublicas: async function (ids) {
+        var data = cargar();
+        var pedidas = {};
+        (ids || []).slice(0, 24).forEach(function (id) { pedidas[String(id)] = true; });
+        var imagenes = {};
+        data.eventos.forEach(function (evento) {
+          if (!pedidas[evento.id] || !evento.activo || !evento.imagen) return;
+          if (String(evento.imagen).indexOf("data:image/") === 0) imagenes[evento.id] = evento.imagen;
+          else if (evento.imagenUrl) imagenes[evento.id] = evento.imagenUrl;
+        });
+        return imagenes;
       },
       eventoPublico: async function (id) {
         var data = cargar();
         var evento = data.eventos.find(function (item) { return item.id === id; });
         if (!evento) throw new Error("No encontramos ese evento.");
-        return publico(evento, data);
+        var item = publico(evento, data);
+        item.imagenUrl = evento.imagenUrl || (String(evento.imagen || "").indexOf("data:image/") === 0 ? evento.imagen : "");
+        return item;
       },
       brochurePublico: async function (id) {
         var data = cargar();
