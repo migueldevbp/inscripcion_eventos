@@ -1,21 +1,22 @@
 :root {
-  --ink: #0f1b2d;
-  --navy: #1a6fdb;
-  --navy-deep: #071933;
-  --navy-mid: #0c2f5c;
-  --canvas: #eef2f7;
+  --ink: #081526;
+  --navy: #1c74ea;
+  --navy-deep: #041325;
+  --navy-mid: #0a2a52;
+  --canvas: #f3f7ff;
   --paper: #ffffff;
-  --on-dark: #f5f8fc;
-  --line: #d7e0ec;
-  --muted: #5a6b7d;
-  --action: #e85d0c;
-  --action-soft: #fff1e8;
-  --signal: #ffc98a;
+  --on-dark: #f7fbff;
+  --line: #c9daf5;
+  --muted: #35557a;
+  --action: #ff6a1a;
+  --action-soft: #fff0e6;
+  --signal: #ffd39a;
   --cyan: #3ec7ff;
-  --danger: #b42318;
-  --ok: #0d7a45;
-  --shadow: 0 18px 40px rgba(7, 25, 51, 0.12);
-  --shadow-soft: 0 8px 24px rgba(7, 25, 51, 0.08);
+  --danger: #c81e1e;
+  --ok: #0f8a4c;
+  --wa: #128c7e;
+  --shadow: 0 22px 48px rgba(4, 19, 37, 0.14);
+  --shadow-soft: 0 10px 28px rgba(12, 58, 120, 0.1);
   --font: "Outfit", "Segoe UI", sans-serif;
   --serif: "Fraunces", Georgia, serif;
   --radius: 20px;
@@ -27,14 +28,15 @@
 body {
   margin: 0;
   background:
-    radial-gradient(circle at 100% 0%, rgba(26, 111, 219, 0.08), transparent 28%),
-    radial-gradient(circle at 0% 20%, rgba(232, 93, 12, 0.05), transparent 24%),
-    var(--canvas);
+    radial-gradient(circle at 100% 0%, rgba(28, 116, 234, 0.14), transparent 30%),
+    radial-gradient(circle at 0% 18%, rgba(255, 106, 26, 0.08), transparent 26%),
+    linear-gradient(180deg, #eaf2ff 0%, var(--canvas) 38%, #f8fbff 100%);
   color: var(--ink);
   font-family: var(--font);
   font-size: 16.5px;
   line-height: 1.5;
   color-scheme: light;
+  min-height: 100vh;
 }
 
 ::selection { background: #c9daf8; }
@@ -545,8 +547,6 @@ p { margin: 0; }
 
 .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
 
-.dato { background: #eef3f9; border-radius: 12px; padding: 10px 12px; }
-
 .dato span { display: block; color: var(--muted); font-size: 0.82rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
 
 .col-form { position: sticky; top: 16px; }
@@ -557,9 +557,41 @@ p { margin: 0; }
 
 .fila-tarifa { display: grid; grid-template-columns: minmax(0, 1fr) minmax(8rem, 11rem) auto; gap: 10px; align-items: end; margin-bottom: 10px; }
 .fila-tarifa .btn { min-height: 46px; }
-.fila-org { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(8rem, 11rem) auto; gap: 10px; align-items: end; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.fila-org { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(8rem, 10rem) minmax(8rem, 10rem) auto; gap: 10px; align-items: end; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .fila-org .btn { min-height: 46px; }
-.enlace-ref { display: inline-block; max-width: 100%; overflow-wrap: anywhere; background: #eef3f9; padding: 8px 10px; border-radius: 10px; font-size: 0.88rem; }
+.enlace-ref { display: inline-block; max-width: 100%; overflow-wrap: anywhere; background: #e8f1ff; padding: 8px 10px; border-radius: 10px; font-size: 0.88rem; color: var(--navy-deep); }
+.contacto-orgs { margin-top: 22px; padding: 16px; border-radius: 18px; background: linear-gradient(145deg, #edf5ff, #fff8f2); border: 1px solid var(--line); }
+.contacto-orgs h2 { font-size: 1.35rem; margin-bottom: 6px; }
+.lista-org-contacto { display: grid; gap: 10px; margin-top: 12px; }
+.org-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(201, 218, 245, 0.9);
+}
+.org-chip span { color: var(--muted); font-weight: 600; }
+.btn-wa {
+  background: linear-gradient(135deg, #25d366, var(--wa));
+  color: white !important;
+  border-color: transparent;
+  box-shadow: 0 10px 22px rgba(18, 140, 126, 0.28);
+}
+.btn-wa:hover { transform: translateY(-1px); }
+.panel-premium .fila-evento,
+.panel-premium .stat,
+.panel-premium .bloque,
+.panel-premium .tabla-wrap {
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  border-color: #c5d8f4;
+  box-shadow: var(--shadow-soft);
+}
+.panel-premium .stat strong { color: var(--navy-deep); }
+.panel-premium .tabla th { color: var(--navy-mid); background: #edf4ff; }
+.dato { background: linear-gradient(145deg, #edf4ff, #fff7ef); border-radius: 12px; padding: 10px 12px; border: 1px solid rgba(201, 218, 245, 0.7); }
 .stat-tarifas strong { font-family: var(--font); font-size: 1rem; font-weight: 650; line-height: 1.35; }
 .opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
@@ -819,6 +851,7 @@ p { margin: 0; }
   .quien { display: none; }
   .tabla { min-width: 0; }
   .fila-tarifa, .fila-org { grid-template-columns: 1fr; }
+  .lista-org-contacto { grid-template-columns: 1fr; }
   .tabla thead { display: none; }
   .tabla tr { display: block; padding: 8px 0; }
   .tabla td { display: flex; justify-content: space-between; gap: 12px; border-bottom: 0; padding: 6px 12px; }

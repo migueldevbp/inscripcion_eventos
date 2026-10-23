@@ -75,11 +75,13 @@
       var usuario = limpio(origen[i] && origen[i].usuario).toLowerCase();
       var nombre = limpio(origen[i] && origen[i].nombre);
       var clave = String((origen[i] && origen[i].clave) || "");
-      if (!usuario && !nombre && !clave) continue;
+      var whatsapp = soloDigitos(origen[i] && origen[i].whatsapp);
+      if (!usuario && !nombre && !clave && !whatsapp) continue;
       utiles.push({
         usuario: usuario,
         nombre: nombre,
         clave: clave,
+        whatsapp: whatsapp,
         existente: Boolean(origen[i] && origen[i].existente)
       });
     }
@@ -91,6 +93,7 @@
       }
       if (utiles[j].usuario === "admin") return "Ese usuario está reservado para el administrador.";
       if (utiles[j].nombre.length < 2 || utiles[j].nombre.length > 80) return "Escribe el nombre de cada organizador.";
+      if (!/^\d{9}$/.test(utiles[j].whatsapp)) return "Cada organizador necesita un WhatsApp de 9 dígitos.";
       if (vistos[utiles[j].usuario]) return "Hay dos organizadores con el mismo usuario.";
       vistos[utiles[j].usuario] = true;
       if ((!utiles[j].existente || opciones.exigirOrganizador) && utiles[j].clave.length < 6) {

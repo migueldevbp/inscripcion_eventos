@@ -220,8 +220,36 @@
     return '<div class="fila-org" data-existente="' + (existente ? "1" : "0") + '">' +
       usuarioCampo +
       '<label class="campo"><span>Nombre</span><input name="orgNombre" maxlength="80" value="' + escapar(org.nombre || "") + '" placeholder="Nombre completo"></label>' +
+      '<label class="campo"><span>WhatsApp</span><input name="orgWhatsapp" inputmode="numeric" maxlength="9" pattern="[0-9]{9}" placeholder="987654321" value="' + escapar(org.whatsapp || "") + '"></label>' +
       '<label class="campo"><span>' + (existente ? "Nueva clave (opcional)" : "Clave") + '</span><input name="orgClave" type="password" minlength="6" autocomplete="new-password" placeholder="' + (existente ? "Sin cambio" : "Mínimo 6") + '"></label>' +
       '<button type="button" class="btn btn-peligro" data-accion="quitar-org">Quitar</button></div>';
+  }
+
+  function mensajeWhatsappPago(tituloEvento, categoria) {
+    var cat = String(categoria || "").trim() || "la categoría elegida";
+    return 'Hola, vengo del Portal de Capacitaciones. Estoy interesado/a en "' + String(tituloEvento || "este evento") + '" y quisiera pagar. Me inscribí en la categoría ' + cat + ".";
+  }
+
+  function enlaceWaOrganizador(whatsapp, mensaje) {
+    var digitos = String(whatsapp || "").replace(/\D/g, "");
+    if (digitos.length === 9) digitos = "51" + digitos;
+    if (digitos.length < 11) return "";
+    return "https://wa.me/" + digitos + "?text=" + encodeURIComponent(mensaje || "");
+  }
+
+  function htmlContactoOrganizadores(evento, categoria) {
+    var orgs = organizadoresDe(evento).filter(function (item) { return item.whatsapp; });
+    if (!orgs.length) return "";
+    var mensaje = mensajeWhatsappPago(evento.titulo, categoria);
+    var titulo = orgs.length === 1 ? "Organizador para el pago" : orgs.length + " organizadores para el pago";
+    return '<div class="contacto-orgs"><h2>' + titulo + '</h2><p class="nota">Escríbeles por WhatsApp para coordinar el pago. El mensaje ya va listo.</p><div class="lista-org-contacto">' +
+      orgs.map(function (org) {
+        var href = enlaceWaOrganizador(org.whatsapp, mensaje);
+        return '<div class="org-chip"><strong>' + escapar(org.nombre || org.usuario) + "</strong><span>" + escapar(org.whatsapp) + "</span>" +
+          (href ? '<a class="btn btn-wa" href="' + escapar(href) + '" target="_blank" rel="noopener noreferrer">WhatsApp</a>' : "") +
+          "</div>";
+      }).join("") +
+      "</div></div>";
   }
 
   function enlaceOrganizador(eventoId, usuario) {
@@ -468,6 +496,7 @@
       return marco('<a class="volver" href="#/">← Todos los eventos</a><div class="vacio"><h1>No encontramos ese evento</h1><p>' + escapar(error.message) + "</p></div>");
     }
     document.title = evento.titulo + " · " + nombreSitio();
+    estado.eventoVista = evento;
     if (evento.imagenUrl) estado.fotos[evento.id] = evento.imagenUrl;
     var ref = leerRefDeHash();
     if (ref) estado.refOrganizador = ref;
@@ -475,12 +504,14 @@
     var enlace = urlSegura(evento.enlace);
     var quedan = evento.cupo ? Math.max(0, Number(evento.cupo) - Number(evento.inscritos || 0)) : null;
     var tarifas = tarifasDe(evento);
+    var orgsPublicos = organizadoresDe(evento);
     var datos = [
       ["Organización", escapar(evento.organizacion)],
       ["Fecha", escapar(formatoFecha(evento.fecha) + (evento.hora ? " · " + evento.hora : ""))],
       ["Modalidad", escapar(modalidadNombre(evento.modalidad))],
       ["Lugar", escapar(evento.lugar || "Por confirmar")]
     ];
+    if (orgsPublicos.length) datos.push(["Organizadores", escapar(String(orgsPublicos.length))]);
     tarifas.forEach(function (tarifa) {
       datos.push([tarifa.nombre, escapar(precioVisible(tarifa.precio))]);
     });
@@ -493,7 +524,8 @@
       }).join("") + "</div>" +
       '<div class="descripcion">' + escapar(evento.descripcion) + "</div>" +
       (evento.requisitos ? "<h2 style=\"margin-top:22px\">Requisitos</h2><div class=\"descripcion\">" + escapar(evento.requisitos) + "</div>" : "") +
-      (evento.contacto ? '<p class="meta" style="margin-top:16px">Contacto: ' + htmlContacto(evento.contacto) + "</p>" : "") +
+      htmlContactoOrganizadores(evento, "") +
+      (evento.contacto ? '<p class="meta" style="margin-top:16px">Contacto general: ' + htmlContacto(evento.contacto) + "</p>" : "") +
       (enlace ? '<p style="margin-top:12px"><a href="' + escapar(enlace) + '" target="_blank" rel="noopener noreferrer">Abrir enlace del evento</a></p>' : "") +
       (evento.tieneBrochure || evento.brochure ? '<p style="margin-top:12px"><button type="button" class="btn btn-secundario" data-accion="descargar-brochure" data-id="' + escapar(evento.id) + '" data-titulo="' + escapar(evento.titulo) + '">Descargar brochure (PDF)</button></p>' : "") +
       '</div><div class="col-form"><div class="tarjeta-form" id="formulario">';
@@ -530,7 +562,7 @@
       ir(estado.sesion.rol === "admin" ? "#/admin" : "#/panel");
       return marco('<p class="cargando">Abriendo tu panel…</p>');
     }
-    return marco('<div class="bloque login-caja"><h1>Entrar</h1><p class="nota">El administrador crea los eventos. Cada organización entra con el usuario de su evento.</p><form id="form-login" method="post" action="#/entrar"><div class="campo" style="margin-top:12px"><span>Usuario</span><input name="usuario" aria-label="Usuario" required autocomplete="username"></div><div class="campo" style="margin-top:10px"><span>Contraseña</span><input name="clave" aria-label="Contraseña" type="password" required autocomplete="current-password"></div><button class="btn btn-primario" style="margin-top:14px" type="submit">Entrar</button></form></div>');
+    return marco('<div class="bloque login-caja panel-premium"><h1>Entrar</h1><p class="nota">El administrador crea los eventos. Cada organización entra con el usuario de su evento.</p><form id="form-login" method="post" action="#/entrar"><div class="campo" style="margin-top:12px"><span>Usuario</span><input name="usuario" aria-label="Usuario" required autocomplete="username"></div><div class="campo" style="margin-top:10px"><span>Contraseña</span><input name="clave" aria-label="Contraseña" type="password" required autocomplete="current-password"></div><button class="btn btn-primario" style="margin-top:14px" type="submit">Entrar</button></form></div>');
   }
 
   async function vistaAdmin() {
@@ -544,7 +576,7 @@
         : "Sin organizadores";
       return '<article class="fila-evento"><div><div class="pills"><span class="pill ' + (evento.activo ? "pill-ok" : "pill-off") + '">' + (evento.activo ? "Abierto" : "Pausado") + "</span><span class=\"pill\">" + escapar(evento.tipo) + '</span></div><h2>' + escapar(evento.titulo) + "</h2><p class=\"meta\">" + escapar(evento.organizacion) + " · " + escapar(formatoFecha(evento.fecha)) + " · " + (evento.inscritos || 0) + " inscritos · " + (evento.pagados || 0) + " pagaron · " + escapar(textoOrg) + "</p></div><div class=\"acciones\"><a class=\"btn btn-secundario\" href=\"#/admin/inscritos/" + escapar(evento.id) + "\">Inscritos</a><a class=\"btn btn-secundario\" href=\"#/admin/editar/" + escapar(evento.id) + "\">Editar</a><button type=\"button\" class=\"btn btn-peligro\" data-accion=\"activar\" data-id=\"" + escapar(evento.id) + "\" data-activo=\"" + (evento.activo ? "1" : "0") + "\">" + (evento.activo ? "Desactivar" : "Activar") + "</button></div></article>";
     }).join("") : '<div class="vacio"><h2>Todavía no hay eventos</h2><p>Crea el primero y asigna el usuario de su organizador.</p></div>';
-    return marco('<div class="subnav"><a class="btn btn-primario" href="#/admin" aria-current="page">Eventos</a><a class="btn btn-secundario" href="#/admin/nuevo">Nuevo evento</a></div><div class="encabezado-pagina"><h1>Eventos</h1><p>Activa, pausa o abre la lista. Al pausar un evento deja de aparecer en la programación y no acepta inscripciones.</p></div>' + filas);
+    return marco('<div class="panel-premium"><div class="subnav"><a class="btn btn-primario" href="#/admin" aria-current="page">Eventos</a><a class="btn btn-secundario" href="#/admin/nuevo">Nuevo evento</a></div><div class="encabezado-pagina"><h1>Eventos</h1><p>Activa, pausa o abre la lista. Al pausar un evento deja de aparecer en la programación y no acepta inscripciones.</p></div>' + filas + "</div>");
   }
 
   function opcionesSelect(lista, actual, etiqueta) {
@@ -570,9 +602,9 @@
     if (!tarifasForm.length) tarifasForm = [{ nombre: "", precio: "" }];
     var filasTarifa = tarifasForm.map(htmlFilaTarifa).join("");
     var orgsForm = organizadoresDe(evento);
-    if (!orgsForm.length) orgsForm = [{ usuario: "", nombre: "", existente: false }];
+    if (!orgsForm.length) orgsForm = [{ usuario: "", nombre: "", whatsapp: "", existente: false }];
     else orgsForm = orgsForm.map(function (item) {
-      return { usuario: item.usuario, nombre: item.nombre || "", existente: true, id: item.id || "" };
+      return { usuario: item.usuario, nombre: item.nombre || "", whatsapp: item.whatsapp || "", existente: true, id: item.id || "" };
     });
     var filasOrg = orgsForm.map(htmlFilaOrganizador).join("");
     var enlaces = id ? orgsForm.filter(function (item) { return item.usuario; }).map(function (item) {
@@ -580,7 +612,7 @@
     }).join("") : "";
     document.title = (id ? "Editar evento" : "Nuevo evento") + " · " + nombreSitio();
     return marco('<div class="subnav"><a class="btn btn-secundario" href="#/admin">Eventos</a><a class="btn btn-primario" href="#/admin/nuevo">Nuevo evento</a></div>' +
-      '<form id="form-evento" method="post" action="#/admin/nuevo" class="form-pagina" data-nuevo="' + (id ? "0" : "1") + '">' +
+      '<form id="form-evento" method="post" action="#/admin/nuevo" class="form-pagina panel-premium" data-nuevo="' + (id ? "0" : "1") + '">' +
       '<input type="hidden" name="eventoId" value="' + escapar(evento.id) + '">' +
       '<section class="bloque"><h2>' + (id ? "Editar evento" : "Nuevo evento") + "</h2>" +
       '<div class="campo campo-ancho"><span>Título</span><input name="titulo" aria-label="Título" required maxlength="140" value="' + escapar(evento.titulo) + '"></div>' +
@@ -602,7 +634,7 @@
       '<div class="campo campo-ancho"><span>Requisitos</span><textarea name="requisitos" maxlength="2000">' + escapar(evento.requisitos || "") + "</textarea></div>" +
       '<label class="check"><input type="checkbox" name="mostrarInscritos"' + (evento.mostrarInscritos !== false ? " checked" : "") + "> Mostrar cuántos inscritos hay en la página pública</label>" +
       '<label class="check"><input type="checkbox" name="activo"' + (evento.activo ? " checked" : "") + "> Inscripciones abiertas</label></section>" +
-      '<section class="bloque"><h2>Organizadores</h2><p class="nota">Puedes crear varios. Cada uno entra con su usuario, ve sus propios inscritos y también el total del evento. Entrégale a cada uno su enlace personal (con <code>?ref=</code>) para que las inscripciones cuenten en su métrica. La clave no se vuelve a mostrar.</p>' +
+      '<section class="bloque"><h2>Organizadores</h2><p class="nota">Puedes crear varios. Cada uno entra con su usuario, ve sus propios inscritos y el total. Su WhatsApp aparece en la ficha para que los inscritos coordinen el pago. Entrégale a cada uno su enlace personal (con <code>?ref=</code>). La clave no se vuelve a mostrar.</p>' +
       '<div id="lista-orgs">' + filasOrg + '</div><button type="button" class="btn btn-secundario" data-accion="agregar-org">Agregar organizador</button>' +
       enlaces +
       '<div class="acciones-form"><button class="btn btn-primario" type="submit">' + (id ? "Guardar cambios" : "Crear evento") + "</button></div></section></form>");
@@ -691,13 +723,13 @@
     var cabeceras = "<th>Folio</th><th>Nombre</th><th>DNI</th><th>Correo</th><th>Categoría</th>" +
       (mostrarOrg ? "<th>Organizador</th>" : "") +
       "<th>WhatsApp</th><th>Pago</th><th>Acciones</th>";
-    return (opciones.volver || "") +
+    return '<div class="panel-premium">' + (opciones.volver || "") +
       '<div class="encabezado-pagina"><div class="pills"><span class="pill ' + (evento.activo ? "pill-ok" : "pill-off") + '">' + (evento.activo ? "Inscripciones abiertas" : "Inscripciones pausadas") + '</span></div><h1>' + escapar(evento.titulo) + "</h1><p>" + escapar(evento.organizacion) + " · " + escapar(formatoFecha(evento.fecha)) + (esOrg && estado.sesion.usuario ? " · Tú: " + escapar(estado.sesion.usuario) : "") + "</p>" + vistas + "</div>" +
       '<section class="stats">' + (statsExtra || "") + '<article class="stat"><span>' + (esOrg && estado.vistaInscritos === "mios" ? "En esta lista" : "Inscritos") + '</span><strong>' + cifras.total + '</strong></article><article class="stat"><span>Pagaron</span><strong>' + cifras.pagados + '</strong></article><article class="stat"><span>Pendientes</span><strong>' + cifras.pendientes + '</strong></article><article class="stat stat-tarifas"><span>Por tarifa</span><strong>' + escapar(cifras.porTarifa) + "</strong></article></section>" +
       enlaceMio +
       (!evento.activo && esOrg ? '<p class="nota">El administrador pausó las inscripciones. Igual puedes revisar la lista y actualizar los pagos.</p>' : "") +
       '<div class="barra-lista"><input id="buscar-inscritos" class="buscador" style="max-width:360px" type="search" placeholder="Buscar nombre, DNI o correo" value="' + escapar(estado.buscaInscritos) + '" aria-label="Buscar inscritos"><div class="acciones">' + filtros + '<button type="button" class="btn btn-secundario" data-accion="excel">Descargar Excel</button></div></div>' +
-      '<div class="tabla-wrap"><table class="tabla"><thead><tr>' + cabeceras + '</tr></thead><tbody id="cuerpo-inscritos">' + htmlFilasInscritos(mostrarOrg) + "</tbody></table></div>";
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr>' + cabeceras + '</tr></thead><tbody id="cuerpo-inscritos">' + htmlFilasInscritos(mostrarOrg) + "</tbody></table></div></div>";
   }
 
   async function vistaInscritosAdmin(id) {
@@ -822,12 +854,13 @@
       lista.push({
         usuario: filas[i].querySelector("[name='orgUsuario']").value,
         nombre: filas[i].querySelector("[name='orgNombre']").value,
+        whatsapp: filas[i].querySelector("[name='orgWhatsapp']").value,
         clave: filas[i].querySelector("[name='orgClave']").value,
         existente: filas[i].dataset.existente === "1"
       });
     }
     return lista.filter(function (item) {
-      return String(item.usuario || "").trim() || String(item.nombre || "").trim() || String(item.clave || "").trim();
+      return String(item.usuario || "").trim() || String(item.nombre || "").trim() || String(item.whatsapp || "").trim() || String(item.clave || "").trim();
     });
   }
 
@@ -916,7 +949,23 @@
       boton.disabled = true;
       try {
         var creada = await window.API.inscribir(inscripcion);
-        form.closest(".tarjeta-form").innerHTML = '<div class="exito"><p class="folio">' + escapar(creada.id) + '</p><h2>Inscripción registrada</h2><p>Guarda ese número. Quedaste en la lista y el pago figura como pendiente hasta que la organización lo confirme. Pueden escribirte al WhatsApp que dejaste.</p><p style="margin-top:14px"><a class="btn btn-secundario" href="#/">Volver a los eventos</a></p></div>';
+        var eventoOk = estado.eventoVista || { id: inscripcion.eventoId, titulo: "el evento", organizadores: [] };
+        var orgsPago = organizadoresDe(eventoOk).filter(function (item) { return item.whatsapp; });
+        if (estado.refOrganizador) {
+          var preferido = orgsPago.filter(function (item) {
+            return String(item.usuario || "").toLowerCase() === String(estado.refOrganizador).toLowerCase();
+          });
+          if (preferido.length) orgsPago = preferido;
+        }
+        var botonesWa = orgsPago.map(function (org) {
+          var href = enlaceWaOrganizador(org.whatsapp, mensajeWhatsappPago(eventoOk.titulo, inscripcion.categoria));
+          return href
+            ? '<a class="btn btn-wa" style="width:100%;margin-top:8px" href="' + escapar(href) + '" target="_blank" rel="noopener noreferrer">Pagar / escribir a ' + escapar(org.nombre || org.usuario) + "</a>"
+            : "";
+        }).join("");
+        form.closest(".tarjeta-form").innerHTML = '<div class="exito"><p class="folio">' + escapar(creada.id) + '</p><h2>Inscripción registrada</h2><p>Guarda ese número. Quedaste en la lista. Ahora escribe al organizador por WhatsApp para coordinar el pago; el mensaje ya incluye el evento y tu categoría.</p>' +
+          (botonesWa || '<p class="nota" style="margin-top:10px">Este evento aún no tiene WhatsApp de organizador cargado.</p>') +
+          '<p style="margin-top:14px"><a class="btn btn-secundario" href="#/">Volver a los eventos</a></p></div>';
       } catch (error) {
         ponerError(form, error.message);
         boton.disabled = false;
@@ -1149,7 +1198,7 @@
 
   function onInput(evento) {
     var campo = evento.target;
-    if (campo && (campo.name === "dni" || campo.name === "whatsapp")) {
+    if (campo && (campo.name === "dni" || campo.name === "whatsapp" || campo.name === "orgWhatsapp")) {
       var maximo = campo.name === "dni" ? 8 : 9;
       var solo = String(campo.value || "").replace(/\D/g, "").slice(0, maximo);
       if (campo.value !== solo) campo.value = solo;

@@ -1,6 +1,6 @@
 (function () {
   var CLAVE_SESION = "portal_sesion";
-  var CLAVE_DEMO = "portalCapacitacionesDemoV2";
+  var CLAVE_DEMO = "portalCapacitacionesDemoV3";
   var HORAS = 12;
 
   function leerSesion() {
@@ -142,8 +142,8 @@
         folio: 2,
         usuarios: [
           { id: "USR-admin", usuario: "admin", clave: "admin123", rol: "admin", eventoId: "", nombre: "Administrador", activo: true },
-          { id: "USR-lima", usuario: "lima.cursos", clave: "evento123", rol: "organizador", eventoId: "EVT-gestion1", nombre: "María Delgado", activo: true },
-          { id: "USR-norte", usuario: "lima.norte", clave: "evento123", rol: "organizador", eventoId: "EVT-gestion1", nombre: "Carlos Núñez", activo: true }
+          { id: "USR-lima", usuario: "lima.cursos", clave: "evento123", rol: "organizador", eventoId: "EVT-gestion1", nombre: "María Delgado", whatsapp: "987654321", activo: true },
+          { id: "USR-norte", usuario: "lima.norte", clave: "evento123", rol: "organizador", eventoId: "EVT-gestion1", nombre: "Carlos Núñez", whatsapp: "912345678", activo: true }
         ],
         eventos: [
           {
@@ -169,8 +169,8 @@
             organizadorUsuario: "lima.cursos",
             organizadorNombre: "María Delgado",
             organizadores: [
-              { id: "USR-lima", usuario: "lima.cursos", nombre: "María Delgado", activo: true },
-              { id: "USR-norte", usuario: "lima.norte", nombre: "Carlos Núñez", activo: true }
+              { id: "USR-lima", usuario: "lima.cursos", nombre: "María Delgado", whatsapp: "987654321", activo: true },
+              { id: "USR-norte", usuario: "lima.norte", nombre: "Carlos Núñez", whatsapp: "912345678", activo: true }
             ]
           },
           {
@@ -295,7 +295,7 @@
       return data.usuarios.filter(function (item) {
         return item.rol === "organizador" && item.eventoId === evento.id && item.activo;
       }).map(function (item) {
-        return { id: item.id, usuario: item.usuario, nombre: item.nombre, activo: true };
+        return { id: item.id, usuario: item.usuario, nombre: item.nombre, whatsapp: item.whatsapp || "", activo: true };
       });
     }
 
@@ -348,10 +348,11 @@
           return {
             usuario: window.Validar.limpio(item && item.usuario).toLowerCase(),
             nombre: window.Validar.limpio(item && item.nombre),
+            whatsapp: window.Validar.soloDigitos(item && item.whatsapp),
             clave: String((item && item.clave) || ""),
             existente: Boolean(item && item.existente)
           };
-        }).filter(function (item) { return item.usuario || item.nombre || item.clave; }) : [],
+        }).filter(function (item) { return item.usuario || item.nombre || item.whatsapp || item.clave; }) : [],
         organizadorUsuario: window.Validar.limpio(datos.organizadorUsuario).toLowerCase(),
         organizadorNombre: window.Validar.limpio(datos.organizadorNombre),
         organizadorClave: String(datos.organizadorClave || "")
@@ -394,8 +395,9 @@
         var data = cargar();
         var evento = data.eventos.find(function (item) { return item.id === id; });
         if (!evento) throw new Error("No encontramos ese evento.");
-        var item = publico(evento, data);
+        var item = completo(evento, data);
         item.imagenUrl = evento.imagenUrl || (String(evento.imagen || "").indexOf("data:image/") === 0 ? evento.imagen : "");
+        item.cantidadOrganizadores = (item.organizadores || []).length;
         return item;
       },
       brochurePublico: async function (id) {
@@ -583,12 +585,14 @@
               rol: "organizador",
               eventoId: evento.id,
               nombre: org.nombre,
+              whatsapp: org.whatsapp || "",
               activo: true
             };
             data.usuarios.push(usuario);
           } else {
             usuario.nombre = org.nombre;
             usuario.eventoId = evento.id;
+            usuario.whatsapp = org.whatsapp || "";
             usuario.activo = true;
             if (org.clave) usuario.clave = org.clave;
           }
@@ -600,7 +604,7 @@
         evento.organizadores = data.usuarios.filter(function (item) {
           return item.rol === "organizador" && item.eventoId === evento.id && item.activo;
         }).map(function (item) {
-          return { id: item.id, usuario: item.usuario, nombre: item.nombre, activo: true };
+          return { id: item.id, usuario: item.usuario, nombre: item.nombre, whatsapp: item.whatsapp || "", activo: true };
         });
         evento.organizadorUsuario = evento.organizadores[0] ? evento.organizadores[0].usuario : "";
         evento.organizadorNombre = evento.organizadores[0] ? evento.organizadores[0].nombre : "";
