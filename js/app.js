@@ -271,27 +271,6 @@
     return "https://wa.me/" + digitos + "?text=" + encodeURIComponent(mensaje || "");
   }
 
-  function htmlContactoOrganizadores(evento, categoria) {
-    var orgs = organizadoresDe(evento).filter(function (item) { return item.whatsapp; });
-    if (!orgs.length) return "";
-    var mensaje = mensajeWhatsappPago({
-      titulo: evento.titulo,
-      organizacion: evento.organizacion,
-      fecha: evento.fecha,
-      categoria: categoria,
-      precio: precioDeTarifa(evento, categoria)
-    });
-    var titulo = orgs.length === 1 ? "Organizador para el pago" : orgs.length + " organizadores para el pago";
-    return '<div class="contacto-orgs"><h2>' + titulo + '</h2><p class="nota">Escríbeles por WhatsApp para coordinar el pago. El mensaje ya va listo.</p><div class="lista-org-contacto">' +
-      orgs.map(function (org) {
-        var href = enlaceWaOrganizador(org.whatsapp, mensaje);
-        return '<div class="org-chip"><strong>' + escapar(org.nombre || org.usuario) + "</strong><span>" + escapar(org.whatsapp) + "</span>" +
-          (href ? '<a class="btn btn-wa" href="' + escapar(href) + '" target="_blank" rel="noopener noreferrer">WhatsApp</a>' : "") +
-          "</div>";
-      }).join("") +
-      "</div></div>";
-  }
-
   function ordenarOrgsPago(orgs, refUsuario) {
     var lista = (orgs || []).slice();
     if (!refUsuario) return lista;
@@ -636,7 +615,6 @@
       }).join("") + "</div>" +
       '<div class="descripcion">' + escapar(evento.descripcion) + "</div>" +
       (evento.requisitos ? "<h2 style=\"margin-top:22px\">Requisitos</h2><div class=\"descripcion\">" + escapar(evento.requisitos) + "</div>" : "") +
-      htmlContactoOrganizadores(evento, "") +
       (evento.contacto ? '<p class="meta" style="margin-top:16px">Contacto general: ' + htmlContacto(evento.contacto) + "</p>" : "") +
       (enlace ? '<p style="margin-top:12px"><a href="' + escapar(enlace) + '" target="_blank" rel="noopener noreferrer">Abrir enlace del evento</a></p>' : "") +
       (evento.tieneBrochure || evento.brochure ? '<p style="margin-top:12px"><button type="button" class="btn btn-secundario" data-accion="descargar-brochure" data-id="' + escapar(evento.id) + '" data-titulo="' + escapar(evento.titulo) + '">Descargar brochure (PDF)</button></p>' : "") +
