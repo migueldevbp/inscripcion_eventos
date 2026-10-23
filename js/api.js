@@ -261,6 +261,8 @@
         cupo: evento.cupo || null,
         precioProfesional: evento.precioProfesional,
         precioEstudiante: evento.precioEstudiante,
+        tarifas: evento.tarifas || [],
+        mostrarInscritos: evento.mostrarInscritos !== false,
         requisitos: evento.requisitos,
         contacto: evento.contacto,
         imagen: evento.imagen,
@@ -304,6 +306,10 @@
         cupo: cupo ? Number(cupo) : null,
         precioProfesional: window.Validar.limpio(datos.precioProfesional),
         precioEstudiante: window.Validar.limpio(datos.precioEstudiante),
+        tarifas: Array.isArray(datos.tarifas) ? datos.tarifas.slice(0, 5).map(function (item) {
+          return { nombre: window.Validar.limpio(item && item.nombre), precio: window.Validar.limpio(item && item.precio) };
+        }).filter(function (item) { return item.nombre || item.precio; }) : [],
+        mostrarInscritos: datos.mostrarInscritos !== false,
         requisitos: window.Validar.texto(datos.requisitos),
         contacto: window.Validar.limpio(datos.contacto),
         imagen: window.Validar.limpio(datos.imagen),
@@ -351,6 +357,16 @@
         if (repetido) throw new Error("Este DNI ya está inscrito en el evento.");
         var ocupados = data.inscripciones.filter(function (item) { return item.eventoId === evento.id; }).length;
         if (evento.cupo && ocupados >= evento.cupo) throw new Error("El cupo de este evento ya se completó.");
+        var nombresTarifa = [];
+        if (evento.tarifas && evento.tarifas.length) {
+          nombresTarifa = evento.tarifas.map(function (item) { return item.nombre; });
+        } else {
+          if (evento.precioProfesional) nombresTarifa.push("Profesional");
+          if (evento.precioEstudiante) nombresTarifa.push("Estudiante");
+        }
+        if (nombresTarifa.length && nombresTarifa.indexOf(window.Validar.limpio(datos.categoria)) === -1) {
+          throw new Error("Elige una tarifa de este evento.");
+        }
         data.folio = (data.folio || 0) + 1;
         var folio = String(data.folio);
         while (folio.length < 4) folio = "0" + folio;
@@ -449,7 +465,11 @@
           organizadorUsuario: "",
           organizadorNombre: ""
         };
-        ["titulo", "organizacion", "tipo", "descripcion", "fecha", "hora", "lugar", "modalidad", "enlace", "cupo", "precioProfesional", "precioEstudiante", "requisitos", "contacto", "imagen", "activo"].forEach(function (campo) {
+        if (entrada.tarifas.length) {
+          entrada.precioProfesional = entrada.tarifas[0].precio || "";
+          entrada.precioEstudiante = entrada.tarifas[1] ? entrada.tarifas[1].precio || "" : "";
+        }
+        ["titulo", "organizacion", "tipo", "descripcion", "fecha", "hora", "lugar", "modalidad", "enlace", "cupo", "precioProfesional", "precioEstudiante", "tarifas", "mostrarInscritos", "requisitos", "contacto", "imagen", "activo"].forEach(function (campo) {
           evento[campo] = entrada[campo];
         });
         if (entrada.organizadorUsuario) {

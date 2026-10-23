@@ -20,7 +20,7 @@ var HORAS_SESION = 12;
 
 var HEADERS = {
   Usuarios: ["id", "usuario", "clave_hash", "salt", "rol", "evento_id", "nombre", "activo", "creado_en"],
-  Eventos: ["id", "titulo", "organizacion", "tipo", "descripcion", "fecha", "hora", "lugar", "modalidad", "enlace", "cupo", "precio_profesional", "precio_estudiante", "requisitos", "contacto", "imagen", "activo", "creado_en"],
+  Eventos: ["id", "titulo", "organizacion", "tipo", "descripcion", "fecha", "hora", "lugar", "modalidad", "enlace", "cupo", "precio_profesional", "precio_estudiante", "requisitos", "contacto", "imagen", "activo", "creado_en", "tarifas", "mostrar_inscritos"],
   Inscripciones: ["id", "evento_id", "nombres", "apellidos", "dni", "correo", "categoria", "whatsapp", "pagado", "fecha"],
   Sesiones: ["token", "usuario_id", "expira"]
 };
@@ -179,9 +179,22 @@ function columna(nombreHoja, campo) {
   return HEADERS[nombreHoja].indexOf(campo) + 1;
 }
 
+function asegurarEncabezados(sh, headers) {
+  var ancho = Math.max(sh.getLastColumn(), headers.length);
+  var actuales = sh.getRange(1, 1, 1, ancho).getValues()[0];
+  for (var i = 0; i < headers.length; i++) {
+    if (String(actuales[i] || "") !== headers[i]) sh.getRange(1, i + 1).setValue(headers[i]);
+  }
+  sh.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#0e2a4a").setFontColor("#ffffff");
+  sh.getRange(1, 1, Math.max(sh.getMaxRows(), 1), headers.length).setNumberFormat("@");
+}
+
 function leerObjetos(nombre) {
   var sh = hoja(nombre);
   var headers = HEADERS[nombre];
+  if (sh.getLastColumn() < headers.length || String(sh.getRange(1, headers.length).getValue()) !== headers[headers.length - 1]) {
+    asegurarEncabezados(sh, headers);
+  }
   var last = sh.getLastRow();
   if (last < 2) return [];
   var values = sh.getRange(2, 1, last - 1, headers.length).getValues();
@@ -365,6 +378,8 @@ function normalizarEvento(row) {
     cupo: cupo,
     precioProfesional: sinMarca(row.precio_profesional).replace(/^\s+|\s+$/g, ""),
     precioEstudiante: sinMarca(row.precio_estudiante).replace(/^\s+|\s+$/g, ""),
+    tarifas: tarifasDelEvento(row),
+    mostrarInscritos: row.mostrar_inscritos === "" || row.mostrar_inscritos == null ? true : esSi(row.mostrar_inscritos),
     requisitos: sinMarca(row.requisitos).replace(/^\s+|\s+$/g, ""),
     contacto: sinMarca(row.contacto).replace(/^\s+|\s+$/g, ""),
     imagen: imagenGuardada(row.imagen),
@@ -384,6 +399,55 @@ function normalizarUsuario(row) {
     salt: String(row.salt || ""),
     claveHash: String(row.clave_hash || "")
   };
+}
+
+function parseTarifas(valor) {
+  var texto = limpio(sinMarca(valor));
+  if (!texto) return [];
+  try {
+    var data = JSON.parse(texto);
+    if (!data || !data.length) return [];
+    var out = [];
+    for (var i = 0; i < data.length && out.length < 5; i++) {
+      var nombre = limpio(data[i].nombre);
+      var precio = limpio(data[i].precio);
+      if (!nombre) continue;
+      out.push({ nombre: nombre, precio: precio });
+    }
+    return out;
+  } catch (error) {
+    return [];
+  }
+}
+
+function tarifasDelEvento(row) {
+  var guardadas = parseTarifas(row.tarifas);
+  if (guardadas.length) return guardadas;
+  var lista = [];
+  var profesional = limpio(sinMarca(row.precio_profesional));
+  var estudiante = limpio(sinMarca(row.precio_estudiante));
+  if (profesional) lista.push({ nombre: "Profesional", precio: profesional });
+  if (estudiante) lista.push({ nombre: "Estudiante", precio: estudiante });
+  return lista;
+}
+
+function limpiarTarifas(lista) {
+  var origen = lista || [];
+  var out = [];
+  var vistos = {};
+  for (var i = 0; i < origen.length && out.length < 5; i++) {
+    var nombre = limpio(origen[i] && origen[i].nombre);
+    var precio = limpio(origen[i] && origen[i].precio);
+    if (!nombre && !precio) continue;
+    if (nombre.length < 2 || nombre.length > 40) return { error: "Cada tarifa necesita un nombre de 2 a 40 caracteres." };
+    if (precio.length > 40) return { error: "El precio de una tarifa es demasiado largo." };
+    var clave = nombre.toLowerCase();
+    if (vistos[clave]) return { error: "Hay dos tarifas con el mismo nombre." };
+    vistos[clave] = true;
+    out.push({ nombre: nombre, precio: precio });
+  }
+  if (!out.length) return { error: "Agrega al menos una tarifa." };
+  return { lista: out };
 }
 
 function jsonInscripcion(row) {
@@ -441,6 +505,8 @@ function jsonEvento(evento, extra) {
     cupo: evento.cupo,
     precioProfesional: evento.precioProfesional,
     precioEstudiante: evento.precioEstudiante,
+    tarifas: evento.tarifas || [],
+    mostrarInscritos: evento.mostrarInscritos !== false,
     requisitos: evento.requisitos,
     contacto: evento.contacto,
     imagen: evento.imagen,
@@ -513,6 +579,13 @@ function inscribir(body) {
       }
     }
     if (evento.cupo && ocupados >= evento.cupo) return { ok: false, error: "El cupo de este evento ya se completó." };
+    var categoria = limpio(body.categoria);
+    var tarifasEvento = evento.tarifas || [];
+    var coincide = false;
+    for (var t = 0; t < tarifasEvento.length; t++) {
+      if (tarifasEvento[t].nombre === categoria) coincide = true;
+    }
+    if (!coincide) return { ok: false, error: "Elige una tarifa de este evento." };
     var folio = siguienteFolio();
     var row = {
       id: folio,
@@ -521,7 +594,7 @@ function inscribir(body) {
       apellidos: textoCelda(limpio(body.apellidos)),
       dni: forzarTexto(dni),
       correo: textoCelda(limpio(body.correo).toLowerCase()),
-      categoria: body.categoria,
+      categoria: textoCelda(categoria),
       whatsapp: forzarTexto(soloDigitos(body.whatsapp)),
       pagado: "NO",
       fecha: forzarTexto(ahoraTexto())
@@ -874,8 +947,10 @@ function guardarEvento(body) {
       modalidad: entrada.modalidad,
       enlace: textoCelda(entrada.enlace),
       cupo: entrada.cupo == null ? "" : String(entrada.cupo),
-      precio_profesional: textoCelda(entrada.precioProfesional),
-      precio_estudiante: textoCelda(entrada.precioEstudiante),
+      precio_profesional: textoCelda(entrada.tarifas[0] ? entrada.tarifas[0].precio : ""),
+      precio_estudiante: textoCelda(entrada.tarifas[1] ? entrada.tarifas[1].precio : ""),
+      tarifas: JSON.stringify(entrada.tarifas),
+      mostrar_inscritos: entrada.mostrarInscritos ? "SI" : "NO",
       requisitos: textoCelda(entrada.requisitos),
       contacto: textoCelda(entrada.contacto),
       imagen: textoCelda(entrada.imagen),
@@ -953,8 +1028,8 @@ function normalizarEntradaEvento(body) {
     modalidad: body.modalidad,
     enlace: limpio(body.enlace),
     cupo: cupo ? Number(cupo) : null,
-    precioProfesional: limpio(body.precioProfesional),
-    precioEstudiante: limpio(body.precioEstudiante),
+    tarifas: (limpiarTarifas(body.tarifas).lista) || [],
+    mostrarInscritos: body.mostrarInscritos !== false && String(body.mostrarInscritos) !== "NO",
     requisitos: texto(body.requisitos),
     contacto: limpio(body.contacto),
     imagen: limpio(body.imagen),
@@ -972,7 +1047,7 @@ function validarInscripcion(datos) {
   if (limpio(datos.apellidos).length > 80) return "Los apellidos son demasiado largos.";
   if (!/^\d{8}$/.test(soloDigitos(datos.dni))) return "El DNI debe tener 8 números.";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpio(datos.correo)) || limpio(datos.correo).length > 120) return "Escribe un correo real, con arroba (@). Ahí llegará tu certificado.";
-  if (datos.categoria !== "profesional" && datos.categoria !== "estudiante") return "Elige si participas como profesional o como estudiante.";
+  if (limpio(datos.categoria).length < 2 || limpio(datos.categoria).length > 40) return "Elige una tarifa.";
   var telefono = soloDigitos(datos.whatsapp);
   if (!/^\d{9}$/.test(telefono)) return "El WhatsApp debe tener 9 números, sin el código de país.";
   return "";
@@ -992,7 +1067,8 @@ function validarEvento(datos, opciones) {
   if (!urlHttp(datos.imagen)) return "La imagen debe ser un enlace http:// o https://.";
   if (texto(datos.requisitos).length > 2000) return "Los requisitos son demasiado largos.";
   if (limpio(datos.contacto).length > 120) return "El contacto es demasiado largo.";
-  if (limpio(datos.precioProfesional).length > 40 || limpio(datos.precioEstudiante).length > 40) return "El texto de la inversión es demasiado largo.";
+  var tarifasLimpias = limpiarTarifas(datos.tarifas);
+  if (tarifasLimpias.error) return tarifasLimpias.error;
   var cupo = limpio(datos.cupo);
   if (cupo && !/^\d+$/.test(cupo)) return "El cupo debe ser un número entero, o quedar vacío si no hay límite.";
   if (cupo && Number(cupo) > 100000) return "El cupo es demasiado alto.";

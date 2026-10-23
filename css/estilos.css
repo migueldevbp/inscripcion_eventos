@@ -379,6 +379,9 @@ p { margin: 0; }
 
 .tarjeta-form h2 { font-size: 1.7rem; margin-bottom: 6px; }
 
+.fila-tarifa { display: grid; grid-template-columns: minmax(0, 1fr) minmax(8rem, 11rem) auto; gap: 10px; align-items: end; margin-bottom: 10px; }
+.fila-tarifa .btn { min-height: 46px; }
+.stat-tarifas strong { font-family: var(--font); font-size: 1rem; font-weight: 650; line-height: 1.35; }
 .opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 .tarjeta-form .opciones { grid-template-columns: 1fr; }
@@ -568,6 +571,7 @@ p { margin: 0; }
   .acciones { justify-content: flex-start; }
   .quien { display: none; }
   .tabla { min-width: 0; }
+  .fila-tarifa { grid-template-columns: 1fr; }
   .tabla thead { display: none; }
   .tabla tr { display: block; padding: 8px 0; }
   .tabla td { display: flex; justify-content: space-between; gap: 12px; border-bottom: 0; padding: 6px 12px; }

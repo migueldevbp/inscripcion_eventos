@@ -43,6 +43,28 @@
     return fecha.getFullYear() === anio && fecha.getMonth() === mes - 1 && fecha.getDate() === dia;
   }
 
+  function revisarTarifas(lista) {
+    var origen = lista || [];
+    var utiles = [];
+    for (var i = 0; i < origen.length; i++) {
+      var nombre = limpio(origen[i] && origen[i].nombre);
+      var precio = limpio(origen[i] && origen[i].precio);
+      if (!nombre && !precio) continue;
+      utiles.push({ nombre: nombre, precio: precio });
+    }
+    if (!utiles.length) return "Agrega al menos una tarifa.";
+    if (utiles.length > 5) return "Puedes agregar hasta 5 tarifas.";
+    var vistos = {};
+    for (var j = 0; j < utiles.length; j++) {
+      if (utiles[j].nombre.length < 2) return "Cada tarifa necesita un nombre.";
+      if (utiles[j].nombre.length > 40 || utiles[j].precio.length > 40) return "El nombre o el precio de una tarifa es demasiado largo.";
+      var clave = utiles[j].nombre.toLowerCase();
+      if (vistos[clave]) return "Hay dos tarifas con el mismo nombre.";
+      vistos[clave] = true;
+    }
+    return "";
+  }
+
   function inscripcion(datos) {
     if (limpio(datos.nombres).length < 2) return "Escribe tus nombres.";
     if (limpio(datos.nombres).length > 80) return "Los nombres son demasiado largos.";
@@ -51,9 +73,7 @@
     if (!/^\d{8}$/.test(soloDigitos(datos.dni))) return "El DNI debe tener 8 números.";
     if (!correoValido(datos.correo)) return "Escribe un correo real, con arroba (@). Ahí llegará tu certificado.";
     if (limpio(datos.correo).length > 120) return "El correo es demasiado largo.";
-    if (datos.categoria !== "profesional" && datos.categoria !== "estudiante") {
-      return "Elige si participas como profesional o como estudiante.";
-    }
+    if (limpio(datos.categoria).length < 2 || limpio(datos.categoria).length > 40) return "Elige una tarifa.";
     var telefono = soloDigitos(datos.whatsapp);
     if (!/^\d{9}$/.test(telefono)) return "El WhatsApp debe tener 9 números, sin el código de país.";
     return "";
@@ -76,11 +96,10 @@
     }
     if (!urlHttp(datos.enlace)) return "El enlace del evento debe empezar por http:// o https://.";
     if (!urlHttp(datos.imagen)) return "La imagen debe ser un enlace http:// o https://.";
+    var errorTarifas = revisarTarifas(datos.tarifas);
+    if (errorTarifas) return errorTarifas;
     if (texto(datos.requisitos).length > 2000) return "Los requisitos son demasiado largos.";
     if (limpio(datos.contacto).length > 120) return "El contacto es demasiado largo.";
-    if (limpio(datos.precioProfesional).length > 40 || limpio(datos.precioEstudiante).length > 40) {
-      return "El texto de la inversión es demasiado largo.";
-    }
     var cupo = limpio(datos.cupo);
     if (cupo && !/^\d+$/.test(cupo)) return "El cupo debe ser un número entero, o quedar vacío si no hay límite.";
     if (cupo && Number(cupo) > 100000) return "El cupo es demasiado alto.";

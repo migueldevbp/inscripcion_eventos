@@ -134,6 +134,28 @@
     return texto;
   }
 
+  function tarifasDe(evento) {
+    if (evento && evento.tarifas && evento.tarifas.length) return evento.tarifas.slice(0, 5);
+    var lista = [];
+    if (evento && evento.precioProfesional) lista.push({ nombre: "Profesional", precio: evento.precioProfesional });
+    if (evento && evento.precioEstudiante) lista.push({ nombre: "Estudiante", precio: evento.precioEstudiante });
+    return lista;
+  }
+
+  function nombreCategoria(valor) {
+    if (valor === "estudiante") return "Estudiante";
+    if (valor === "profesional") return "Profesional";
+    return String(valor || "");
+  }
+
+  function muestraConteo(evento) {
+    return !evento || evento.mostrarInscritos !== false;
+  }
+
+  function htmlFilaTarifa(tarifa) {
+    return '<div class="fila-tarifa"><label class="campo"><span>Nombre</span><input name="tarifaNombre" maxlength="40" value="' + escapar(tarifa.nombre || "") + '" placeholder="Ej. Profesional"></label><label class="campo"><span>Precio</span><input name="tarifaPrecio" maxlength="40" value="' + escapar(tarifa.precio || "") + '" placeholder="S/ 80 o Gratuito"></label><button type="button" class="btn btn-peligro" data-accion="quitar-tarifa">Quitar</button></div>';
+  }
+
   function nombreSitio() {
     return window.APP_CONFIG.NOMBRE_SITIO || "Portal de Capacitaciones";
   }
@@ -259,14 +281,17 @@
     var foto = fotoVisible(evento);
     var lleno = evento.cupo && Number(evento.inscritos || 0) >= Number(evento.cupo);
     var cupo = evento.cupo ? (evento.inscritos || 0) + " de " + evento.cupo : (evento.inscritos || 0) + " inscritos";
+    var pillConteo = "";
+    if (muestraConteo(evento)) pillConteo = '<span class="pill">' + escapar(cupo) + "</span>";
+    else if (lleno) pillConteo = '<span class="pill pill-off">Cupo lleno</span>';
     return '<a class="tarjeta" href="#/evento/' + escapar(evento.id) + '">' +
       '<div class="portada' + (foto ? "" : " sin-foto") + '"><span>' + escapar(evento.tipo) + "</span>" +
       (foto ? '<img alt="" src="' + escapar(foto) + '" referrerpolicy="no-referrer">' : "") + "</div>" +
       '<div class="cuerpo-tarjeta"><div class="fila-sello"><div><p class="meta">' + escapar(evento.organizacion) + "</p><h2>" + escapar(evento.titulo) + "</h2></div>" +
       '<span class="sello"><span class="sello-mes">' + escapar(sello.mes) + '</span><span class="sello-dia">' + escapar(sello.dia) + "</span></span></div>" +
       '<p class="meta">' + escapar(modalidadNombre(evento.modalidad)) + (evento.lugar ? " · " + escapar(evento.lugar) : "") + "</p>" +
-      '<div class="pills"><span class="pill">' + escapar(cupo) + "</span>" +
-      (lleno ? '<span class="pill pill-off">Cupo lleno</span>' : "") +
+      '<div class="pills">' + pillConteo +
+      (lleno && muestraConteo(evento) ? '<span class="pill pill-off">Cupo lleno</span>' : "") +
       (esPasado(evento.fecha) ? '<span class="pill pill-aviso">Fecha pasada</span>' : "") +
       "</div></div></a>";
   }
@@ -323,14 +348,16 @@
     var lleno = evento.cupo && Number(evento.inscritos || 0) >= Number(evento.cupo);
     var enlace = urlSegura(evento.enlace);
     var quedan = evento.cupo ? Math.max(0, Number(evento.cupo) - Number(evento.inscritos || 0)) : null;
+    var tarifas = tarifasDe(evento);
     var datos = [
       ["Organización", escapar(evento.organizacion)],
       ["Fecha", escapar(formatoFecha(evento.fecha) + (evento.hora ? " · " + evento.hora : ""))],
       ["Modalidad", escapar(modalidadNombre(evento.modalidad))],
-      ["Lugar", escapar(evento.lugar || "Por confirmar")],
-      ["Inversión profesional", escapar(precioVisible(evento.precioProfesional))],
-      ["Inversión estudiante", escapar(precioVisible(evento.precioEstudiante))]
+      ["Lugar", escapar(evento.lugar || "Por confirmar")]
     ];
+    tarifas.forEach(function (tarifa) {
+      datos.push([tarifa.nombre, escapar(precioVisible(tarifa.precio))]);
+    });
     var ficha = '<a class="volver" href="#/">← Todos los eventos</a><article class="ficha"><div class="prosa">' +
       '<div class="pills"><span class="pill">' + escapar(evento.tipo) + "</span>" +
       (esPasado(evento.fecha) ? '<span class="pill pill-aviso">Fecha pasada</span>' : "") + "</div>" +
@@ -349,15 +376,18 @@
     } else if (lleno) {
       ficha += "<h2>Cupo completo</h2><p>Ya no quedan lugares. Puedes escribir a la organización si abrieran una vacante.</p>";
     } else {
-      ficha += "<h2>Inscribirme</h2><p class=\"nota\">" + (quedan == null ? "Sin límite de cupo." : quedan + " cupos libres.") + "</p>" +
+      var notaCupo = "Sin límite de cupo.";
+      if (quedan != null) notaCupo = muestraConteo(evento) ? quedan + " cupos libres." : "Inscripciones abiertas.";
+      ficha += "<h2>Inscribirme</h2><p class=\"nota\">" + notaCupo + "</p>" +
         '<form id="form-inscripcion" method="post" action="#/"><input type="hidden" name="eventoId" value="' + escapar(evento.id) + '">' +
         '<div class="campo" style="margin-top:12px"><span>Nombres</span><input name="nombres" aria-label="Nombres" required maxlength="80" autocomplete="given-name"></div>' +
         '<div class="campo" style="margin-top:10px"><span>Apellidos</span><input name="apellidos" aria-label="Apellidos" required maxlength="80" autocomplete="family-name"></div>' +
         '<div class="campo" style="margin-top:10px"><span>DNI</span><input name="dni" aria-label="DNI" required inputmode="numeric" maxlength="8" pattern="[0-9]{8}" autocomplete="off" placeholder="8 números"></div>' +
         '<div class="campo" style="margin-top:10px"><span>Correo</span><input name="correo" aria-label="Correo" type="email" required maxlength="120" autocomplete="email" placeholder="tunombre@correo.com"><p class="nota">Usa un correo real. Ahí llegará tu certificado.</p></div>' +
         '<div class="campo" style="margin-top:10px"><span>Categoría</span><div class="opciones">' +
-        '<label class="opcion"><input type="radio" name="categoria" value="profesional"><span>Profesional<small>' + escapar(precioVisible(evento.precioProfesional)) + "</small></span></label>" +
-        '<label class="opcion"><input type="radio" name="categoria" value="estudiante"><span>Estudiante<small>' + escapar(precioVisible(evento.precioEstudiante)) + "</small></span></label>" +
+        tarifas.map(function (tarifa) {
+          return '<label class="opcion"><input type="radio" name="categoria" value="' + escapar(tarifa.nombre) + '"><span>' + escapar(tarifa.nombre) + "<small>" + escapar(precioVisible(tarifa.precio)) + "</small></span></label>";
+        }).join("") +
         "</div></div>" +
         '<div class="campo" style="margin-top:10px"><span>WhatsApp</span><input name="whatsapp" aria-label="WhatsApp" required inputmode="numeric" maxlength="9" pattern="[0-9]{9}" placeholder="987654321" autocomplete="tel"></div>' +
         '<button class="btn btn-primario" style="margin-top:14px;width:100%" type="submit">Enviar inscripción</button></form>';
@@ -397,13 +427,16 @@
     if (!exigirRol("admin")) return vistaEntrar();
     var evento = {
       id: "", titulo: "", organizacion: "", tipo: "Curso", descripcion: "", fecha: "", hora: "", lugar: "",
-      modalidad: "presencial", enlace: "", cupo: "", precioProfesional: "", precioEstudiante: "",
-      requisitos: "", contacto: "", imagen: "", activo: true, organizadorUsuario: "", organizadorNombre: ""
+      modalidad: "presencial", enlace: "", cupo: "", tarifas: [{ nombre: "Profesional", precio: "" }, { nombre: "Estudiante", precio: "" }],
+      mostrarInscritos: true, requisitos: "", contacto: "", imagen: "", activo: true, organizadorUsuario: "", organizadorNombre: ""
     };
     if (id) {
       var detalle = await window.API.detalleAdmin(id);
       evento = detalle.evento;
     }
+    var tarifasForm = tarifasDe(evento);
+    if (!tarifasForm.length) tarifasForm = [{ nombre: "", precio: "" }];
+    var filasTarifa = tarifasForm.map(htmlFilaTarifa).join("");
     document.title = (id ? "Editar evento" : "Nuevo evento") + " · " + nombreSitio();
     var usuarioNuevo = !evento.organizadorUsuario;
     var usuarioCampo = usuarioNuevo
@@ -424,10 +457,10 @@
       '<div class="campo"><span>Enlace (opcional)</span><input name="enlace" type="url" value="' + escapar(evento.enlace || "") + '"></div>' +
       '<div class="campo"><span>Contacto de la organización</span><input name="contacto" maxlength="120" value="' + escapar(evento.contacto || "") + '"></div>' +
       '<div class="campo"><span>Cupo</span><input name="cupo" inputmode="numeric" placeholder="Vacío = sin límite" value="' + escapar(evento.cupo || "") + '"></div>' +
-      '<div class="campo"><span>Inversión profesional</span><input name="precioProfesional" maxlength="40" placeholder="S/ 80 o Gratuito" value="' + escapar(evento.precioProfesional || "") + '"></div>' +
-      '<div class="campo"><span>Inversión estudiante</span><input name="precioEstudiante" maxlength="40" placeholder="S/ 40 o Gratuito" value="' + escapar(evento.precioEstudiante || "") + '"></div>' +
+      '<div class="campo campo-ancho"><span>Tarifas</span><p class="nota">Hasta 5. Cada una se muestra en la ficha y se puede elegir al inscribirse.</p><div id="lista-tarifas">' + filasTarifa + '</div><button type="button" class="btn btn-secundario" data-accion="agregar-tarifa">Agregar tarifa</button></div>' +
       '<div class="campo campo-ancho"><span>Foto del evento</span><input type="hidden" name="imagen" value="' + escapar(evento.imagen || "") + '"><input name="imagenArchivo" type="file" accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp" aria-label="Foto del evento"><p class="nota">Elige una foto de tu computadora, en JPG o PNG. ' + (fotoVisible(evento) ? "Si no eliges nada, se queda la foto actual." : "Si no eliges nada, el evento queda sin foto.") + '</p><img class="vista-foto" id="vista-foto" alt=""' + (fotoVisible(evento) ? ' src="' + escapar(fotoVisible(evento)) + '"' : " hidden") + "></div>" +
       '<div class="campo campo-ancho"><span>Requisitos</span><textarea name="requisitos" maxlength="2000">' + escapar(evento.requisitos || "") + "</textarea></div>" +
+      '<label class="check"><input type="checkbox" name="mostrarInscritos"' + (evento.mostrarInscritos !== false ? " checked" : "") + "> Mostrar cuántos inscritos hay en la página pública</label>" +
       '<label class="check"><input type="checkbox" name="activo"' + (evento.activo ? " checked" : "") + "> Inscripciones abiertas</label></section>" +
       '<section class="bloque"><h2>Acceso del organizador</h2><p class="nota">Esta persona entra por el botón Entrar y solo ve las inscripciones de este evento. Entrégale el usuario y la clave por un canal aparte: la clave no se vuelve a mostrar.</p>' +
       usuarioCampo +
@@ -438,12 +471,18 @@
 
   function resumen(lista) {
     var pagados = lista.filter(function (item) { return item.pagado; }).length;
+    var conteo = {};
+    var orden = [];
+    lista.forEach(function (item) {
+      var nombre = nombreCategoria(item.categoria) || "Sin tarifa";
+      if (!conteo[nombre]) { conteo[nombre] = 0; orden.push(nombre); }
+      conteo[nombre]++;
+    });
     return {
       total: lista.length,
       pagados: pagados,
       pendientes: lista.length - pagados,
-      profesionales: lista.filter(function (item) { return item.categoria === "profesional"; }).length,
-      estudiantes: lista.filter(function (item) { return item.categoria === "estudiante"; }).length
+      porTarifa: orden.length ? orden.map(function (nombre) { return nombre + " " + conteo[nombre]; }).join(" · ") : "0"
     };
   }
 
@@ -472,7 +511,7 @@
         : '<span class="pill pill-aviso">Pendiente</span>';
       var whatsapp = String(item.whatsapp || "");
       var enlaceWhatsapp = whatsapp.length === 9 ? "51" + whatsapp : whatsapp;
-      return "<tr><td data-label=\"Folio\">" + escapar(item.id) + "</td><td data-label=\"Nombre\">" + escapar(item.nombres + " " + item.apellidos) + "</td><td data-label=\"DNI\">" + escapar(item.dni) + "</td><td data-label=\"Correo\">" + escapar(item.correo) + "</td><td data-label=\"Categoría\">" + (item.categoria === "estudiante" ? "Estudiante" : "Profesional") + "</td><td data-label=\"WhatsApp\">" + escapar(item.whatsapp) + ' · <a href="https://wa.me/' + escapar(enlaceWhatsapp) + '" target="_blank" rel="noopener noreferrer">Escribir</a></td><td data-label=\"Pago\">' + pago + '</td><td data-label="Acciones"><button type="button" class="btn btn-secundario" data-accion="pagado" data-id="' + escapar(item.id) + '" data-pagado="' + (item.pagado ? "1" : "0") + '">' + (item.pagado ? "Marcar pendiente" : "Marcar pagado") + '</button> <button type="button" class="btn btn-peligro" data-accion="anular" data-id="' + escapar(item.id) + '">Anular</button></td></tr>';
+      return "<tr><td data-label=\"Folio\">" + escapar(item.id) + "</td><td data-label=\"Nombre\">" + escapar(item.nombres + " " + item.apellidos) + "</td><td data-label=\"DNI\">" + escapar(item.dni) + "</td><td data-label=\"Correo\">" + escapar(item.correo) + "</td><td data-label=\"Categoría\">" + escapar(nombreCategoria(item.categoria)) + "</td><td data-label=\"WhatsApp\">" + escapar(item.whatsapp) + ' · <a href="https://wa.me/' + escapar(enlaceWhatsapp) + '" target="_blank" rel="noopener noreferrer">Escribir</a></td><td data-label=\"Pago\">' + pago + '</td><td data-label="Acciones"><button type="button" class="btn btn-secundario" data-accion="pagado" data-id="' + escapar(item.id) + '" data-pagado="' + (item.pagado ? "1" : "0") + '">' + (item.pagado ? "Marcar pendiente" : "Marcar pagado") + '</button> <button type="button" class="btn btn-peligro" data-accion="anular" data-id="' + escapar(item.id) + '">Anular</button></td></tr>';
     }).join("");
   }
 
@@ -493,7 +532,7 @@
     }).join("");
     return (volver || "") +
       '<div class="encabezado-pagina"><div class="pills"><span class="pill ' + (evento.activo ? "pill-ok" : "pill-off") + '">' + (evento.activo ? "Inscripciones abiertas" : "Inscripciones pausadas") + '</span></div><h1>' + escapar(evento.titulo) + "</h1><p>" + escapar(evento.organizacion) + " · " + escapar(formatoFecha(evento.fecha)) + (evento.organizadorUsuario ? " · Organizador: " + escapar(evento.organizadorUsuario) : "") + "</p></div>" +
-      '<section class="stats"><article class="stat"><span>Inscritos</span><strong>' + cifras.total + '</strong></article><article class="stat"><span>Pagaron</span><strong>' + cifras.pagados + '</strong></article><article class="stat"><span>Pendientes</span><strong>' + cifras.pendientes + '</strong></article><article class="stat"><span>Profesionales / estudiantes</span><strong>' + cifras.profesionales + " / " + cifras.estudiantes + "</strong></article></section>" +
+      '<section class="stats"><article class="stat"><span>Inscritos</span><strong>' + cifras.total + '</strong></article><article class="stat"><span>Pagaron</span><strong>' + cifras.pagados + '</strong></article><article class="stat"><span>Pendientes</span><strong>' + cifras.pendientes + '</strong></article><article class="stat stat-tarifas"><span>Por tarifa</span><strong>' + escapar(cifras.porTarifa) + "</strong></article></section>" +
       (!evento.activo && estado.sesion && estado.sesion.rol === "organizador" ? '<p class="nota">El administrador pausó las inscripciones. Igual puedes revisar la lista y actualizar los pagos.</p>' : "") +
       '<div class="barra-lista"><input id="buscar-inscritos" class="buscador" style="max-width:360px" type="search" placeholder="Buscar nombre, DNI o correo" value="' + escapar(estado.buscaInscritos) + '" aria-label="Buscar inscritos"><div class="acciones">' + filtros + '<button type="button" class="btn btn-secundario" data-accion="excel">Descargar Excel</button></div></div>' +
       '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Folio</th><th>Nombre</th><th>DNI</th><th>Correo</th><th>Categoría</th><th>WhatsApp</th><th>Pago</th><th>Acciones</th></tr></thead><tbody id="cuerpo-inscritos">' + htmlFilasInscritos() + "</tbody></table></div>";
@@ -582,8 +621,23 @@
     }
   }
 
+  function leerTarifas(form) {
+    var filas = form.querySelectorAll(".fila-tarifa");
+    var lista = [];
+    for (var i = 0; i < filas.length && lista.length < 5; i++) {
+      lista.push({
+        nombre: filas[i].querySelector("[name='tarifaNombre']").value,
+        precio: filas[i].querySelector("[name='tarifaPrecio']").value
+      });
+    }
+    return lista.filter(function (item) {
+      return String(item.nombre || "").trim() || String(item.precio || "").trim();
+    });
+  }
+
   function leerEvento(form) {
     var datos = new FormData(form);
+    var tarifas = leerTarifas(form);
     return {
       id: datos.get("eventoId") || "",
       titulo: datos.get("titulo"),
@@ -596,12 +650,14 @@
       modalidad: datos.get("modalidad"),
       enlace: datos.get("enlace"),
       cupo: datos.get("cupo"),
-      precioProfesional: datos.get("precioProfesional"),
-      precioEstudiante: datos.get("precioEstudiante"),
+      precioProfesional: tarifas[0] ? tarifas[0].precio : "",
+      precioEstudiante: tarifas[1] ? tarifas[1].precio : "",
       requisitos: datos.get("requisitos"),
       contacto: datos.get("contacto"),
       imagen: datos.get("imagen"),
       activo: form.activo.checked,
+      mostrarInscritos: form.mostrarInscritos.checked,
+      tarifas: tarifas,
       organizadorUsuario: datos.get("organizadorUsuario"),
       organizadorNombre: datos.get("organizadorNombre"),
       organizadorClave: datos.get("organizadorClave")
@@ -621,7 +677,7 @@
     if (!evento) return;
     var filas = [["Folio", "Nombres", "Apellidos", "DNI", "Correo", "Categoría", "WhatsApp", "Pagado", "Fecha"]];
     estado.listaInscritos.forEach(function (item) {
-      filas.push([item.id, item.nombres, item.apellidos, item.dni, item.correo, item.categoria, item.whatsapp, item.pagado ? "SI" : "NO", item.fecha]);
+      filas.push([item.id, item.nombres, item.apellidos, item.dni, item.correo, nombreCategoria(item.categoria), item.whatsapp, item.pagado ? "SI" : "NO", item.fecha]);
     });
     var libro = '<?xml version="1.0" encoding="UTF-8"?>' +
       '<?mso-application progid="Excel.Sheet"?>' +
@@ -732,6 +788,22 @@
     var boton = evento.target.closest("[data-accion]");
     if (!boton || !document.getElementById("app").contains(boton)) return;
     var accion = boton.dataset.accion;
+    if (accion === "agregar-tarifa") {
+      var listaTarifas = document.getElementById("lista-tarifas");
+      if (!listaTarifas || listaTarifas.querySelectorAll(".fila-tarifa").length >= 5) {
+        avisar("Puedes agregar hasta 5 tarifas.", "mal");
+        return;
+      }
+      listaTarifas.insertAdjacentHTML("beforeend", htmlFilaTarifa({ nombre: "", precio: "" }));
+      return;
+    }
+    if (accion === "quitar-tarifa") {
+      var grupo = document.getElementById("lista-tarifas");
+      var fila = boton.closest(".fila-tarifa");
+      if (!grupo || !fila || grupo.querySelectorAll(".fila-tarifa").length <= 1) return;
+      fila.remove();
+      return;
+    }
     if (accion === "tipo") {
       estado.tipo = boton.dataset.tipo;
       document.querySelectorAll("[data-accion='tipo']").forEach(function (chip) {
