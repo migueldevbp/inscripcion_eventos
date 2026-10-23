@@ -18,14 +18,18 @@
   var busquedaTimer = 0;
 
   function iconoSvg(nombre) {
+    var s = ' fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"';
     var icons = {
-      buscar: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-      diploma: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 016.5 5h11A2.5 2.5 0 0120 7.5v6A2.5 2.5 0 0117.5 16h-11A2.5 2.5 0 014 13.5v-6z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 9h8M8 12h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15.2 15.2l1.3 5.3 1.7-1.2 1.7 1.2 1.3-5.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-      calendario: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 10h17M8 3.5v3M16 3.5v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/></svg>',
-      lista: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-      usuario: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 19c1.8-3.2 4.2-4.5 7-4.5S17.2 15.8 19 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-      check: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 12.5l2.5 2.5L16 9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-      flecha: '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      marca: '<svg class="ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.2L12 4l8 4.2v7.1L12 20l-8-4.7V8.2z"' + s + '/><path d="M12 12l8-4.2M12 12v8M12 12L4 7.8"' + s + '/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>',
+      buscar: '<svg class="ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="6.5"' + s + '/><path d="M20 20l-3.2-3.2"' + s + "/></svg>",
+      diploma: '<svg class="ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7.2A2.2 2.2 0 016.2 5h11.6A2.2 2.2 0 0120 7.2v6.1A2.2 2.2 0 0117.8 15.5H6.2A2.2 2.2 0 014 13.3V7.2z"' + s + '/><path d="M8 9h8M8 12h5"' + s + '/><path d="M15.4 15.2l1.2 5.1 1.7-1.15 1.7 1.15 1.2-5.1"' + s + "/></svg>",
+      calendario: '<svg class="ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"' + s + '/><path d="M3.5 10h17M8 3.8v3.2M16 3.8v3.2"' + s + '/><circle cx="12" cy="15.2" r="1.35" fill="currentColor" stroke="none"/></svg>',
+      eventos: '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 8h14v11a2 2 0 01-2 2H7a2 2 0 01-2-2V8z"' + s + '/><path d="M5 10h14M9 4.5v4M15 4.5v4"' + s + "/></svg>",
+      entrar: '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M10 4H7a2 2 0 00-2 2v12a2 2 0 002 2h3"' + s + '/><path d="M14 8l4 4-4 4M10 12h8"' + s + "/></svg>",
+      lista: '<svg class="ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 7h11M9 12h11M9 17h11"' + s + '/><circle cx="5" cy="7" r="1.2" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="5" cy="17" r="1.2" fill="currentColor" stroke="none"/></svg>',
+      usuario: '<svg class="ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="3.4"' + s + '/><path d="M5.2 19c1.7-3.1 4-4.4 6.8-4.4s5.1 1.3 6.8 4.4"' + s + "/></svg>",
+      check: '<svg class="ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8.5"' + s + '/><path d="M8.2 12.2l2.5 2.5 5.1-5.2"' + s + "/></svg>",
+      flecha: '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"' + s + "/></svg>"
     };
     return icons[nombre] || "";
   }
@@ -447,19 +451,19 @@
     var ruta = parseRuta();
     var panelHref = sesion && sesion.rol === "admin" ? "#/admin" : "#/panel";
     var panelTexto = sesion && sesion.rol === "admin" ? "Administrar" : "Mis inscritos";
-    var menu = '<a href="#/"' + (ruta.nombre === "inicio" || ruta.nombre === "evento" ? ' aria-current="page"' : "") + '>Eventos</a>';
+    var menu = '<a class="menu-enlace" href="#/"' + (ruta.nombre === "inicio" || ruta.nombre === "evento" ? ' aria-current="page"' : "") + '>' + iconoSvg("eventos") + "<span>Eventos</span></a>";
     if (sesion) {
       menu += '<span class="quien">' + escapar(sesion.nombre) + "</span>";
-      menu += '<a href="' + panelHref + '"' + (ruta.nombre === "admin" || ruta.nombre === "panel" ? ' aria-current="page"' : "") + ">" + panelTexto + "</a>";
-      menu += '<a href="#/cuenta"' + (ruta.nombre === "cuenta" ? ' aria-current="page"' : "") + ">Contraseña</a>";
+      menu += '<a class="menu-enlace" href="' + panelHref + '"' + (ruta.nombre === "admin" || ruta.nombre === "panel" ? ' aria-current="page"' : "") + ">" + iconoSvg("lista") + "<span>" + panelTexto + "</span></a>";
+      menu += '<a class="menu-enlace" href="#/cuenta"' + (ruta.nombre === "cuenta" ? ' aria-current="page"' : "") + ">" + iconoSvg("usuario") + "<span>Contraseña</span></a>";
       menu += '<button type="button" class="btn btn-claro" data-accion="salir">Salir</button>';
     } else {
-      menu += '<a class="btn btn-claro" href="#/entrar"' + (ruta.nombre === "entrar" ? ' aria-current="page"' : "") + ">Entrar</a>";
+      menu += '<a class="btn btn-claro btn-entrar" href="#/entrar"' + (ruta.nombre === "entrar" ? ' aria-current="page"' : "") + ">" + iconoSvg("entrar") + "<span>Entrar</span></a>";
     }
-    return '' +
+    return "" +
       '<a class="saltar" href="#contenido">Saltar al contenido</a>' +
       '<div class="tope"><header class="barra"><div class="ancho barra-inner">' +
-      '<a class="marca" href="#/"><span class="marca-signo" aria-hidden="true"><svg viewBox="0 0 32 32" width="22" height="22"><rect x="6" y="8" width="20" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 13h20M11 6v5M21 6v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>' + escapar(nombreSitio()) + "</a>" +
+      '<a class="marca" href="#/"><span class="marca-signo" aria-hidden="true">' + iconoSvg("marca") + '</span><span class="marca-texto">' + escapar(nombreSitio()) + "</span></a>" +
       '<nav class="menu" aria-label="Principal">' + menu + "</nav></div></header>" + htmlAviso() + "</div>" +
       '<main id="contenido" class="principal" tabindex="-1">' + (hero || "") + '<div class="ancho">' + contenido + "</div></main>" +
       '<footer class="pie"><div class="ancho"><strong>' + escapar(nombreSitio()) + "</strong><p>" + escapar(window.APP_CONFIG.BAJADA || "") + " El pago lo confirma la organización de cada evento.</p></div></footer>";
