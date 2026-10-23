@@ -59,6 +59,7 @@ function enrutar(body) {
   if (action === "guardarEvento") return guardarEvento(body);
   if (action === "activarEvento") return activarEvento(body);
   if (action === "miPanel") return miPanel(body);
+  if (action === "reclamarInscritos") return reclamarInscritos(body);
   if (action === "marcarPago") return marcarPago(body);
   if (action === "anularInscripcion") return anularInscripcion(body);
   if (action === "cambiarClave") return cambiarClave(body);
@@ -873,6 +874,56 @@ function miPanel(body) {
       mios: mias.length
     }
   };
+}
+
+/** Asigna al organizador logueado las inscripciones de su evento sin organizador_id. */
+function reclamarInscritos(body) {
+  var usuario = exigir(body, ["organizador"]);
+  if (!usuario.eventoId) return { ok: false, error: "Tu usuario no tiene un evento asignado." };
+  return conBloqueo(function () {
+    var resultado = asignarInscritosSinAtribucion_(usuario.eventoId, usuario.usuario);
+    if (!resultado.ok) return resultado;
+    return miPanel({ token: body.token, action: "miPanel" });
+  });
+}
+
+/**
+ * Ejecutar UNA VEZ desde el editor de Apps Script (▶ Ejecutar).
+ * Pasa los 29 (u otras) inscripciones sin atribución del evento al usuario jesus.
+ */
+function ASIGNAR_INSCRITOS_A_JESUS() {
+  var resultado = asignarInscritosSinAtribucion_("EVT-f3e612cd", "jesus");
+  Logger.log(JSON.stringify(resultado));
+}
+
+function asignarInscritosSinAtribucion_(eventoId, usuarioOrg) {
+  var usuarios = leerObjetos("Usuarios");
+  var org = null;
+  var u;
+  for (u = 0; u < usuarios.length; u++) {
+    if (String(usuarios[u].rol) !== "organizador") continue;
+    if (String(usuarios[u].usuario).toLowerCase() !== String(usuarioOrg || "").toLowerCase()) continue;
+    if (String(usuarios[u].evento_id) !== String(eventoId)) continue;
+    if (!esSi(usuarios[u].activo)) continue;
+    org = usuarios[u];
+    break;
+  }
+  if (!org) return { ok: false, error: "No encontramos el organizador " + usuarioOrg + " en ese evento." };
+
+  var sh = hoja("Inscripciones");
+  var filas = leerObjetos("Inscripciones");
+  var colOrg = columna("Inscripciones", "organizador_id");
+  var asignados = 0;
+  var i;
+  for (i = 0; i < filas.length; i++) {
+    if (String(filas[i].evento_id) !== String(eventoId)) continue;
+    if (String(filas[i].organizador_id || "") !== "") continue;
+    var fila = filaPorId(sh, filas[i].id);
+    if (fila < 0) continue;
+    sh.getRange(fila, colOrg).setValue(String(org.id));
+    asignados++;
+  }
+  return { ok: true, asignados: asignados, organizadorId: String(org.id), usuario: String(org.usuario) };
 }
 
 function inscripcionesDe(eventoId) {

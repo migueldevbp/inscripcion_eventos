@@ -825,6 +825,9 @@
       if (estado.sesion.usuario && evento.id) {
         enlaceMio = '<div class="bloque" style="margin-top:12px;padding:14px"><p class="nota" style="margin:0 0 6px">Tu enlace personal para métricas. Quien se inscriba por aquí cuenta como tuyo:</p><code class="enlace-ref">' + escapar(enlaceOrganizador(evento.id, estado.sesion.usuario)) + '</code> <button type="button" class="btn btn-secundario" data-accion="copiar-enlace" data-enlace="' + escapar(enlaceOrganizador(evento.id, estado.sesion.usuario)) + '">Copiar</button></div>';
       }
+      if (Number(opciones.totales.inscritos || 0) > 0 && Number(opciones.totales.mios || 0) === 0) {
+        enlaceMio += '<div class="bloque" style="margin-top:12px;padding:14px"><p class="nota" style="margin:0 0 10px">Hay inscritos en el evento sin atribución (entraron sin tu enlace). Puedes asignártelos una vez.</p><button type="button" class="btn btn-primario" data-accion="reclamar-inscritos">Asignarme los inscritos sin atribución</button></div>';
+      }
     }
     var cabeceras = "<th>Folio</th><th>Nombre</th><th>DNI</th><th>Correo</th><th>Categoría</th>" +
       (mostrarOrg ? "<th>Organizador</th>" : "") +
@@ -1199,6 +1202,24 @@
     if (accion === "vista-inscritos") {
       estado.vistaInscritos = boton.dataset.vista || "mios";
       render();
+      return;
+    }
+    if (accion === "reclamar-inscritos") {
+      var seguroReclamo = await confirmar(
+        "¿Asignarte todas las inscripciones de este evento que aún no tienen organizador? Pasarán a contar en Mis inscritos.",
+        "Asignármelos"
+      );
+      if (!seguroReclamo) return;
+      boton.disabled = true;
+      try {
+        await window.API.reclamarInscritos();
+        estado.vistaInscritos = "mios";
+        avisar("Listo. Ya aparecen en Mis inscritos.");
+        render();
+      } catch (error) {
+        avisar(error.message, "mal");
+        boton.disabled = false;
+      }
       return;
     }
     if (accion === "copiar-enlace") {

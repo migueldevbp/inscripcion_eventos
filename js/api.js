@@ -124,6 +124,9 @@
       miPanel: async function () {
         return llamar("miPanel");
       },
+      reclamarInscritos: async function () {
+        return llamar("reclamarInscritos");
+      },
       marcarPago: async function (id, pagado) {
         return (await llamar("marcarPago", { id: id, pagado: pagado })).inscripcion;
       },
@@ -642,6 +645,25 @@
             mios: mias.length
           }
         };
+      },
+      reclamarInscritos: async function () {
+        var usuario = exigir(["organizador"]);
+        var data = cargar();
+        var evento = data.eventos.find(function (item) { return item.id === usuario.eventoId; });
+        if (!evento) throw new Error("Tu usuario no tiene un evento asignado.");
+        var org = data.usuarios.find(function (item) {
+          return item.id === usuario.id && item.rol === "organizador";
+        });
+        if (!org) throw new Error("No encontramos tu usuario organizador.");
+        data.inscripciones.forEach(function (item) {
+          if (item.eventoId !== evento.id) return;
+          if (item.organizadorId) return;
+          item.organizadorId = org.id;
+          item.organizadorUsuario = org.usuario;
+          item.organizadorNombre = org.nombre || "";
+        });
+        guardar(data);
+        return this.miPanel();
       },
       marcarPago: async function (id, pagado) {
         var usuario = exigir(["admin", "organizador"]);
