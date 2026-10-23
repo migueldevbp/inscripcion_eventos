@@ -25,6 +25,7 @@
   function urlHttp(valor) {
     var s = limpio(valor);
     if (!s || /^drive:[A-Za-z0-9_-]{10,}$/.test(s)) return true;
+    if (/^data:application\/pdf;base64,[A-Za-z0-9+/=]+$/.test(s)) return true;
     try {
       var url = new URL(s);
       return url.protocol === "https:" || url.protocol === "http:";
@@ -134,6 +135,7 @@
     }
     if (!urlHttp(datos.enlace)) return "El enlace del evento debe empezar por http:// o https://.";
     if (!urlHttp(datos.imagen)) return "La imagen debe ser un enlace http:// o https://.";
+    if (!urlHttp(datos.brochure)) return "El brochure debe ser un PDF subido o un enlace http:// o https://.";
     var errorTarifas = revisarTarifas(datos.tarifas);
     if (errorTarifas) return errorTarifas;
     if (texto(datos.requisitos).length > 2000) return "Los requisitos son demasiado largos.";

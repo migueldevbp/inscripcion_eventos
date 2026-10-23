@@ -88,6 +88,10 @@
       eventoPublico: async function (id) {
         return (await llamar("eventoPublico", { id: id })).evento;
       },
+      brochurePublico: async function (id) {
+        var json = await llamar("brochurePublico", { id: id });
+        return { archivo: json.archivo || "", nombre: json.nombre || "", url: json.url || "" };
+      },
       inscribir: async function (datos) {
         var mensaje = window.Validar.inscripcion(datos);
         if (mensaje) throw new Error(mensaje);
@@ -156,6 +160,7 @@
             requisitos: "DNI vigente y una idea de proyecto, aunque esté en borrador.",
             contacto: "cursos@formacionlima.ejemplo",
             imagen: "",
+            brochure: "",
             activo: true,
             creadoEn: "2026-10-01 10:00:00",
             organizadorUsuario: "lima.cursos",
@@ -182,6 +187,7 @@
             requisitos: "Conexión estable. Conviene tener la cámara disponible para la práctica.",
             contacto: "aula@saludcomunitaria.ejemplo",
             imagen: "",
+            brochure: "",
             activo: true,
             creadoEn: "2026-10-02 11:00:00",
             organizadorUsuario: "",
@@ -204,6 +210,7 @@
             requisitos: "Cargo vigente o carta de la municipalidad.",
             contacto: "mesas@gestionpublica.ejemplo",
             imagen: "",
+            brochure: "",
             activo: false,
             creadoEn: "2026-08-01 09:00:00",
             organizadorUsuario: "",
@@ -271,6 +278,8 @@
         requisitos: evento.requisitos,
         contacto: evento.contacto,
         imagen: evento.imagen,
+        brochure: evento.brochure || "",
+        tieneBrochure: !!evento.brochure,
         activo: evento.activo,
         inscritos: conteo.inscritos
       };
@@ -328,6 +337,7 @@
         requisitos: window.Validar.texto(datos.requisitos),
         contacto: window.Validar.limpio(datos.contacto),
         imagen: window.Validar.limpio(datos.imagen),
+        brochure: window.Validar.limpio(datos.brochure),
         activo: Boolean(datos.activo),
         organizadores: Array.isArray(datos.organizadores) ? datos.organizadores.slice(0, 10).map(function (item) {
           return {
@@ -366,6 +376,22 @@
         var evento = data.eventos.find(function (item) { return item.id === id; });
         if (!evento) throw new Error("No encontramos ese evento.");
         return publico(evento, data);
+      },
+      brochurePublico: async function (id) {
+        var data = cargar();
+        var evento = data.eventos.find(function (item) { return item.id === id; });
+        if (!evento || !evento.brochure) throw new Error("Este evento no tiene brochure.");
+        if (String(evento.brochure).indexOf("data:application/pdf;base64,") === 0) {
+          return {
+            archivo: String(evento.brochure).split(",")[1] || "",
+            nombre: "brochure-" + evento.id + ".pdf",
+            url: ""
+          };
+        }
+        if (/^https?:\/\//i.test(evento.brochure)) {
+          return { archivo: "", nombre: "brochure-" + evento.id + ".pdf", url: evento.brochure };
+        }
+        throw new Error("Este evento no tiene brochure.");
       },
       inscribir: async function (datos) {
         var mensaje = window.Validar.inscripcion(datos);
@@ -496,6 +522,12 @@
           if (foto.indexOf("/9j/") !== 0 || foto.length > 1800000) throw new Error("No se pudo usar esa foto.");
           entrada.imagen = "data:image/jpeg;base64," + foto;
         }
+        if (datos.quitarBrochure) entrada.brochure = "";
+        if (datos.brochureArchivo) {
+          var pdf = String(datos.brochureArchivo).replace(/\s/g, "");
+          if (pdf.indexOf("JVBERi") !== 0 || pdf.length > 7000000) throw new Error("No se pudo usar ese PDF.");
+          entrada.brochure = "data:application/pdf;base64," + pdf;
+        }
         for (var i = 0; i < entrada.organizadores.length; i++) {
           var org = entrada.organizadores[i];
           var ocupado = data.usuarios.find(function (item) { return item.usuario === org.usuario; });
@@ -516,7 +548,7 @@
           entrada.precioProfesional = entrada.tarifas[0].precio || "";
           entrada.precioEstudiante = entrada.tarifas[1] ? entrada.tarifas[1].precio || "" : "";
         }
-        ["titulo", "organizacion", "tipo", "descripcion", "fecha", "hora", "lugar", "modalidad", "enlace", "cupo", "precioProfesional", "precioEstudiante", "tarifas", "mostrarInscritos", "requisitos", "contacto", "imagen", "activo"].forEach(function (campo) {
+        ["titulo", "organizacion", "tipo", "descripcion", "fecha", "hora", "lugar", "modalidad", "enlace", "cupo", "precioProfesional", "precioEstudiante", "tarifas", "mostrarInscritos", "requisitos", "contacto", "imagen", "brochure", "activo"].forEach(function (campo) {
           evento[campo] = entrada[campo];
         });
         var activos = {};

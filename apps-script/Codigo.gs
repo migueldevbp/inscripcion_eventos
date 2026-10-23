@@ -20,7 +20,7 @@ var HORAS_SESION = 12;
 
 var HEADERS = {
   Usuarios: ["id", "usuario", "clave_hash", "salt", "rol", "evento_id", "nombre", "activo", "creado_en"],
-  Eventos: ["id", "titulo", "organizacion", "tipo", "descripcion", "fecha", "hora", "lugar", "modalidad", "enlace", "cupo", "precio_profesional", "precio_estudiante", "requisitos", "contacto", "imagen", "activo", "creado_en", "tarifas", "mostrar_inscritos"],
+  Eventos: ["id", "titulo", "organizacion", "tipo", "descripcion", "fecha", "hora", "lugar", "modalidad", "enlace", "cupo", "precio_profesional", "precio_estudiante", "requisitos", "contacto", "imagen", "activo", "creado_en", "tarifas", "mostrar_inscritos", "brochure"],
   Inscripciones: ["id", "evento_id", "nombres", "apellidos", "dni", "correo", "categoria", "whatsapp", "pagado", "fecha", "organizador_id"],
   Sesiones: ["token", "usuario_id", "expira"]
 };
@@ -62,6 +62,7 @@ function enrutar(body) {
   if (action === "marcarPago") return marcarPago(body);
   if (action === "anularInscripcion") return anularInscripcion(body);
   if (action === "cambiarClave") return cambiarClave(body);
+  if (action === "brochurePublico") return brochurePublico(body);
   return { ok: false, error: "Acción no reconocida." };
 }
 
@@ -328,6 +329,7 @@ function urlHttp(valor) {
 function imagenGuardada(valor) {
   var s = limpio(sinMarca(valor));
   if (esDrive(s) || /^https?:\/\/\S+$/i.test(s)) return s;
+  if (/^data:application\/pdf;base64,[A-Za-z0-9+/=]+$/.test(s)) return s;
   return "";
 }
 
@@ -383,6 +385,7 @@ function normalizarEvento(row) {
     requisitos: sinMarca(row.requisitos).replace(/^\s+|\s+$/g, ""),
     contacto: sinMarca(row.contacto).replace(/^\s+|\s+$/g, ""),
     imagen: imagenGuardada(row.imagen),
+    brochure: imagenGuardada(row.brochure),
     activo: esSi(row.activo),
     creadoEn: comoFechaHora(row.creado_en)
   };
@@ -540,6 +543,8 @@ function jsonEvento(evento, extra) {
     contacto: evento.contacto,
     imagen: evento.imagen,
     imagenUrl: imagenVisible(evento.imagen),
+    brochure: evento.brochure || "",
+    tieneBrochure: !!evento.brochure,
     activo: evento.activo,
     inscritos: extra.inscritos || 0
   };
@@ -964,6 +969,49 @@ function publicarImagen(datos) {
   return "drive:" + archivo.getId();
 }
 
+function publicarBrochure(datos) {
+  var crudo = String(datos || "").replace(/\s/g, "");
+  var coma = crudo.indexOf(",");
+  if (coma !== -1) crudo = crudo.substring(coma + 1);
+  if (crudo.indexOf("JVBERi") !== 0) throw new Error("El brochure debe ser un PDF.");
+  if (crudo.length < 100 || crudo.length > 7000000) throw new Error("El PDF es demasiado pesado. Usa uno de hasta 5 MB.");
+  var bytes = Utilities.base64Decode(crudo);
+  var archivo = carpetaImagenes().createFile(Utilities.newBlob(bytes, "application/pdf", "brochure-" + Utilities.getUuid() + ".pdf"));
+  return "drive:" + archivo.getId();
+}
+
+function brochurePublico(body) {
+  var filas = leerObjetos("Eventos");
+  var crudo = null;
+  for (var i = 0; i < filas.length; i++) {
+    if (String(filas[i].id) === String(body.id || "")) crudo = filas[i];
+  }
+  if (!crudo) return { ok: false, error: "No encontramos ese evento." };
+  var evento = normalizarEvento(crudo);
+  if (!evento.brochure) return { ok: false, error: "Este evento no tiene brochure." };
+  if (evento.brochure.indexOf("drive:") === 0) {
+    try {
+      var archivo = DriveApp.getFileById(evento.brochure.substring(6));
+      var blob = archivo.getBlob();
+      var bytes = blob.getBytes();
+      if (!bytes || bytes.length < 32 || bytes.length > 5500000) {
+        return { ok: false, error: "No se pudo leer el brochure." };
+      }
+      return {
+        ok: true,
+        nombre: limpio(archivo.getName()) || ("brochure-" + evento.id + ".pdf"),
+        archivo: Utilities.base64Encode(bytes)
+      };
+    } catch (error) {
+      return { ok: false, error: "No se pudo descargar el brochure. Revisa el permiso de Drive." };
+    }
+  }
+  if (/^https?:\/\//i.test(evento.brochure)) {
+    return { ok: true, url: evento.brochure, nombre: "brochure-" + evento.id + ".pdf" };
+  }
+  return { ok: false, error: "Este evento no tiene brochure." };
+}
+
 function guardarEvento(body) {
   exigir(body, ["admin"]);
   return conBloqueo(function () {
@@ -987,6 +1035,8 @@ function guardarEvento(body) {
       if (!ocupado && !org.clave) return { ok: false, error: "La clave de " + org.usuario + " debe tener al menos 6 caracteres." };
     }
     if (body.imagenArchivo) entrada.imagen = publicarImagen(body.imagenArchivo);
+    if (body.quitarBrochure) entrada.brochure = "";
+    if (body.brochureArchivo) entrada.brochure = publicarBrochure(body.brochureArchivo);
     var id = esNuevo ? nuevoId("EVT") : actual.id;
     var fila = {
       id: id,
@@ -1007,6 +1057,7 @@ function guardarEvento(body) {
       requisitos: textoCelda(entrada.requisitos),
       contacto: textoCelda(entrada.contacto),
       imagen: textoCelda(entrada.imagen),
+      brochure: textoCelda(entrada.brochure),
       activo: entrada.activo ? "SI" : "NO",
       creado_en: esNuevo ? ahoraTexto() : forzarTexto(actual.creadoEn)
     };
@@ -1136,6 +1187,7 @@ function normalizarEntradaEvento(body) {
     requisitos: texto(body.requisitos),
     contacto: limpio(body.contacto),
     imagen: limpio(body.imagen),
+    brochure: limpio(body.brochure),
     activo: Boolean(body.activo),
     organizadores: (limpiarOrganizadores(orgs).lista) || []
   };
@@ -1166,6 +1218,7 @@ function validarEvento(datos, opciones) {
   if (MODALIDADES.indexOf(datos.modalidad) === -1) return "Elige si el evento es presencial, virtual o híbrido.";
   if (!urlHttp(datos.enlace)) return "El enlace del evento debe empezar por http:// o https://.";
   if (!urlHttp(datos.imagen)) return "La imagen debe ser un enlace http:// o https://.";
+  if (!urlHttp(datos.brochure)) return "El brochure debe ser un PDF subido o un enlace http:// o https://.";
   if (texto(datos.requisitos).length > 2000) return "Los requisitos son demasiado largos.";
   if (limpio(datos.contacto).length > 120) return "El contacto es demasiado largo.";
   var tarifasLimpias = limpiarTarifas(datos.tarifas);

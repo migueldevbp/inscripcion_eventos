@@ -38,6 +38,35 @@
     return urlSegura((evento && (evento.imagenUrl || evento.imagen)) || "");
   }
 
+  function prepararPdf(archivo) {
+    return new Promise(function (resolve, reject) {
+      if ((archivo.type || "") !== "application/pdf" && !/\.pdf$/i.test(archivo.name || "")) {
+        reject(new Error("El brochure debe ser un PDF."));
+        return;
+      }
+      if (archivo.size > 5 * 1024 * 1024) {
+        reject(new Error("El PDF pesa más de 5 MB. Elige uno más liviano."));
+        return;
+      }
+      var lector = new FileReader();
+      lector.onerror = function () { reject(new Error("No se pudo leer el PDF.")); };
+      lector.onload = function () {
+        var base64 = String(lector.result || "").split(",")[1] || "";
+        if (base64.indexOf("JVBERi") !== 0 || base64.length < 100 || base64.length > 7000000) {
+          reject(new Error("No se pudo usar ese PDF. Prueba con otro archivo."));
+          return;
+        }
+        resolve(base64);
+      };
+      lector.readAsDataURL(archivo);
+    });
+  }
+
+  function nombreBrochure(titulo) {
+    var limpio = String(titulo || "brochure").replace(/[^\w\sáéíóúñÁÉÍÓÚÑ-]+/g, "").trim().replace(/\s+/g, "-");
+    return (limpio || "brochure").slice(0, 60) + ".pdf";
+  }
+
   function prepararImagen(archivo) {
     return new Promise(function (resolve, reject) {
       if (!/^image\/(jpeg|png|webp|gif)$/.test(archivo.type || "")) {
@@ -414,6 +443,7 @@
       (evento.requisitos ? "<h2 style=\"margin-top:22px\">Requisitos</h2><div class=\"descripcion\">" + escapar(evento.requisitos) + "</div>" : "") +
       (evento.contacto ? '<p class="meta" style="margin-top:16px">Contacto: ' + htmlContacto(evento.contacto) + "</p>" : "") +
       (enlace ? '<p style="margin-top:12px"><a href="' + escapar(enlace) + '" target="_blank" rel="noopener noreferrer">Abrir enlace del evento</a></p>' : "") +
+      (evento.tieneBrochure || evento.brochure ? '<p style="margin-top:12px"><button type="button" class="btn btn-secundario" data-accion="descargar-brochure" data-id="' + escapar(evento.id) + '" data-titulo="' + escapar(evento.titulo) + '">Descargar brochure (PDF)</button></p>' : "") +
       '</div><div class="col-form"><div class="tarjeta-form" id="formulario">';
 
     if (!evento.activo) {
@@ -478,7 +508,7 @@
     var evento = {
       id: "", titulo: "", organizacion: "", tipo: "Curso", descripcion: "", fecha: "", hora: "", lugar: "",
       modalidad: "presencial", enlace: "", cupo: "", tarifas: [{ nombre: "Profesional", precio: "" }, { nombre: "Estudiante", precio: "" }],
-      mostrarInscritos: true, requisitos: "", contacto: "", imagen: "", activo: true, organizadores: [{ usuario: "", nombre: "", existente: false }]
+      mostrarInscritos: true, requisitos: "", contacto: "", imagen: "", brochure: "", activo: true, organizadores: [{ usuario: "", nombre: "", existente: false }]
     };
     if (id) {
       var detalle = await window.API.detalleAdmin(id);
@@ -514,6 +544,9 @@
       '<div class="campo"><span>Cupo</span><input name="cupo" inputmode="numeric" placeholder="Vacío = sin límite" value="' + escapar(evento.cupo || "") + '"></div>' +
       '<div class="campo campo-ancho"><span>Tarifas</span><p class="nota">Hasta 5. Cada una se muestra en la ficha y se puede elegir al inscribirse.</p><div id="lista-tarifas">' + filasTarifa + '</div><button type="button" class="btn btn-secundario" data-accion="agregar-tarifa">Agregar tarifa</button></div>' +
       '<div class="campo campo-ancho"><span>Foto del evento</span><input type="hidden" name="imagen" value="' + escapar(evento.imagen || "") + '"><input name="imagenArchivo" type="file" accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp" aria-label="Foto del evento"><p class="nota">Elige una foto de tu computadora, en JPG o PNG. ' + (fotoVisible(evento) ? "Si no eliges nada, se queda la foto actual." : "Si no eliges nada, el evento queda sin foto.") + '</p><img class="vista-foto" id="vista-foto" alt=""' + (fotoVisible(evento) ? ' src="' + escapar(fotoVisible(evento)) + '"' : " hidden") + "></div>" +
+      '<div class="campo campo-ancho"><span>Brochure (PDF)</span><input type="hidden" name="brochure" value="' + escapar(evento.brochure || "") + '"><input name="brochureArchivo" type="file" accept="application/pdf,.pdf" aria-label="Brochure PDF"><p class="nota">Opcional. Quienes vean el evento podrán descargarlo. Máximo 5 MB. ' + (evento.brochure || evento.tieneBrochure ? "Si no eliges nada, se queda el brochure actual." : "Si no eliges nada, el evento queda sin brochure.") + "</p>" +
+      (evento.brochure || evento.tieneBrochure ? '<label class="check"><input type="checkbox" name="quitarBrochure"> Quitar el brochure actual</label>' : "") +
+      "</div>" +
       '<div class="campo campo-ancho"><span>Requisitos</span><textarea name="requisitos" maxlength="2000">' + escapar(evento.requisitos || "") + "</textarea></div>" +
       '<label class="check"><input type="checkbox" name="mostrarInscritos"' + (evento.mostrarInscritos !== false ? " checked" : "") + "> Mostrar cuántos inscritos hay en la página pública</label>" +
       '<label class="check"><input type="checkbox" name="activo"' + (evento.activo ? " checked" : "") + "> Inscripciones abiertas</label></section>" +
@@ -762,6 +795,8 @@
       requisitos: datos.get("requisitos"),
       contacto: datos.get("contacto"),
       imagen: datos.get("imagen"),
+      brochure: datos.get("brochure"),
+      quitarBrochure: !!(form.quitarBrochure && form.quitarBrochure.checked),
       activo: form.activo.checked,
       mostrarInscritos: form.mostrarInscritos.checked,
       tarifas: tarifas,
@@ -860,9 +895,17 @@
           botonEvento.textContent = "Subiendo foto…";
           entrada.imagenArchivo = await prepararImagen(archivoFoto.files[0]);
         }
+        var archivoPdf = form.querySelector('input[name="brochureArchivo"]');
+        if (archivoPdf && archivoPdf.files && archivoPdf.files[0]) {
+          botonEvento.textContent = "Subiendo brochure…";
+          entrada.brochureArchivo = await prepararPdf(archivoPdf.files[0]);
+          entrada.quitarBrochure = false;
+        }
         var guardado = await window.API.guardarEvento(entrada);
         if (!window.API.esDemo && entrada.imagenArchivo && String(guardado.imagen || "").indexOf("drive:") !== 0 && String(guardado.imagen || "").indexOf("http") !== 0) {
           avisar("El evento se guardó, pero la foto no. Falta publicar de nuevo la aplicación web de Google.", "mal");
+        } else if (!window.API.esDemo && entrada.brochureArchivo && !(guardado.tieneBrochure || String(guardado.brochure || "").indexOf("drive:") === 0 || String(guardado.brochure || "").indexOf("http") === 0)) {
+          avisar("El evento se guardó, pero el brochure no. Falta publicar de nuevo la aplicación web de Google.", "mal");
         } else {
           avisar(entrada.id ? "Evento actualizado." : "Evento creado. Entrega el usuario y la clave al organizador; la clave no se vuelve a mostrar.");
         }
@@ -945,6 +988,35 @@
       } else {
         window.prompt("Copia este enlace:", texto);
       }
+      return;
+    }
+    if (accion === "descargar-brochure") {
+      boton.disabled = true;
+      var textoBtn = boton.textContent;
+      boton.textContent = "Preparando…";
+      try {
+        var pdf = await window.API.brochurePublico(boton.dataset.id);
+        if (pdf.url) {
+          window.open(pdf.url, "_blank", "noopener,noreferrer");
+        } else {
+          var binario = atob(pdf.archivo);
+          var bytes = new Uint8Array(binario.length);
+          for (var i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+          var blob = new Blob([bytes], { type: "application/pdf" });
+          var enlacePdf = document.createElement("a");
+          enlacePdf.href = URL.createObjectURL(blob);
+          enlacePdf.download = pdf.nombre || nombreBrochure(boton.dataset.titulo);
+          document.body.appendChild(enlacePdf);
+          enlacePdf.click();
+          enlacePdf.remove();
+          setTimeout(function () { URL.revokeObjectURL(enlacePdf.href); }, 2000);
+        }
+        avisar("Brochure listo.");
+      } catch (error) {
+        avisar(error.message || "No se pudo descargar el brochure.", "mal");
+      }
+      boton.disabled = false;
+      boton.textContent = textoBtn;
       return;
     }
     if (accion === "tipo") {
