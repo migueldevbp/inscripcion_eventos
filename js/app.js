@@ -20,7 +20,8 @@
   function iconoSvg(nombre) {
     var icons = {
       buscar: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-      rayo: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 10-14h-7l0-6z" fill="currentColor"/></svg>',
+      diploma: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 016.5 5h11A2.5 2.5 0 0120 7.5v6A2.5 2.5 0 0117.5 16h-11A2.5 2.5 0 014 13.5v-6z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 9h8M8 12h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15.2 15.2l1.3 5.3 1.7-1.2 1.7 1.2 1.3-5.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      calendario: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 10h17M8 3.5v3M16 3.5v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/></svg>',
       lista: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
       usuario: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 19c1.8-3.2 4.2-4.5 7-4.5S17.2 15.8 19 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
       check: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 12.5l2.5 2.5L16 9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -555,8 +556,19 @@
     var tipos = ["Todos"].concat(window.Validar.TIPOS.filter(function (tipo) {
       return estado.eventos.some(function (evento) { return evento.tipo === tipo; });
     }));
-    var hero = '<div class="hero-franja"><div class="hero-fondo" aria-hidden="true"></div><section class="hero ancho"><div class="hero-copy anim-entrar"><p class="sobrelinea">' + iconoSvg("rayo") + ' Programación abierta</p><h1>Inscríbete a cursos y capacitaciones</h1><p class="lead">Elige un evento, deja tus datos y sigue el pago con la organización. Rápido, claro y listo para tu equipo.</p></div>' +
-      (proximo ? '<a class="proximo anim-entrar anim-delay" href="#/evento/' + escapar(proximo.id) + '"><span>Próximo evento</span><strong>' + escapar(proximo.titulo) + "</strong><em>" + escapar(proximo.organizacion) + " · " + escapar(formatoFecha(proximo.fecha)) + '</em><span class="proximo-cta">Abrir ficha ' + iconoSvg("flecha") + "</span></a>" : "") +
+    var hero = '<div class="hero-franja"><div class="hero-fondo" aria-hidden="true"></div><section class="hero ancho"><div class="hero-copy anim-entrar">' +
+      '<p class="sobrelinea"><span class="sobrelinea-icono" aria-hidden="true">' + iconoSvg("diploma") + "</span> Programación abierta</p>" +
+      "<h1>Inscríbete a cursos y capacitaciones</h1>" +
+      '<p class="lead">Elige un evento, deja tus datos y coordina el pago con la organización. Claro, ágil y listo para tu equipo.</p>' +
+      '<div class="hero-acciones"><button type="button" class="btn btn-hero" data-accion="ir-grilla">Ver programación</button></div>' +
+      "</div>" +
+      (proximo
+        ? '<a class="proximo anim-entrar anim-delay" href="#/evento/' + escapar(proximo.id) + '">' +
+          '<span class="proximo-etiqueta"><span class="proximo-icono" aria-hidden="true">' + iconoSvg("calendario") + "</span> Próximo evento</span>" +
+          "<strong>" + escapar(proximo.titulo) + "</strong>" +
+          "<em>" + escapar(proximo.organizacion) + " · " + escapar(formatoFecha(proximo.fecha)) + "</em>" +
+          '<span class="proximo-cta">Abrir ficha ' + iconoSvg("flecha") + "</span></a>"
+        : "") +
       "</section></div>";
     var chips = tipos.map(function (tipo) {
       return '<button type="button" class="chip" data-accion="tipo" data-tipo="' + escapar(tipo) + '" aria-pressed="' + (estado.tipo === tipo ? "true" : "false") + '">' + escapar(tipo) + "</button>";
@@ -1140,6 +1152,11 @@
     var boton = evento.target.closest("[data-accion]");
     if (!boton || !document.getElementById("app").contains(boton)) return;
     var accion = boton.dataset.accion;
+    if (accion === "ir-grilla") {
+      var destino = document.getElementById("grilla") || document.querySelector(".herramientas");
+      if (destino) destino.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     if (accion === "agregar-tarifa") {
       var listaTarifas = document.getElementById("lista-tarifas");
       if (!listaTarifas || listaTarifas.querySelectorAll(".fila-tarifa").length >= 5) {

@@ -216,60 +216,185 @@ p { margin: 0; }
 .sobrelinea {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  letter-spacing: 0.14em;
+  gap: 10px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
-  color: var(--signal);
-  margin-bottom: 12px;
+  color: #ffe3b8;
+  margin-bottom: 16px;
+  padding: 5px 14px 5px 5px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255, 196, 120, 0.18), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 211, 154, 0.42);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
 }
 
-.sobrelinea svg { color: var(--cyan); }
+.sobrelinea-icono {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #071933;
+  background: linear-gradient(145deg, #ffd39a, #ff7a2f);
+  box-shadow: 0 6px 14px rgba(255, 106, 26, 0.35);
+}
 
-.hero h1 { font-size: clamp(2.35rem, 4.8vw, 3.7rem); max-width: 11em; letter-spacing: -0.03em; }
+.sobrelinea-icono svg { display: block; }
+
+.hero h1 {
+  font-size: clamp(2.45rem, 5vw, 3.85rem);
+  max-width: 11em;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
 
 #contenido h1:focus { outline: none; }
 
 .cuerpo-tarjeta h2 { font-size: 1.35rem; }
 
-.lead { margin-top: 16px; max-width: 36rem; color: rgba(245, 248, 252, 0.88); font-size: 1.08rem; }
+.lead {
+  margin-top: 16px;
+  max-width: 34rem;
+  color: rgba(247, 251, 255, 0.92);
+  font-size: 1.1rem;
+  line-height: 1.55;
+}
+
+.hero-acciones { margin-top: 22px; }
+
+.btn-hero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 700;
+  color: #071933 !important;
+  background: linear-gradient(135deg, #ffd39a, #ff7a2f);
+  border: 1px solid transparent;
+  box-shadow: 0 14px 28px rgba(255, 106, 26, 0.32);
+  transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
+}
+
+.btn-hero:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px rgba(255, 106, 26, 0.4);
+}
 
 .proximo {
+  position: relative;
   display: block;
+  overflow: hidden;
   text-decoration: none;
   color: inherit;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 22px;
-  padding: 20px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
-  transition: transform 0.35s var(--ease), background 0.35s var(--ease), border-color 0.35s var(--ease);
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.06) 48%, rgba(255, 138, 48, 0.12) 100%);
+  border: 1px solid rgba(255, 211, 154, 0.38);
+  border-radius: 24px;
+  padding: 22px 22px 20px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 24px 56px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition: transform 0.35s var(--ease), border-color 0.35s var(--ease), box-shadow 0.35s var(--ease);
+}
+
+.proximo::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #ffd39a, #ff6a1a);
+}
+
+.proximo::after {
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -40px;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 196, 120, 0.28), transparent 68%);
+  pointer-events: none;
 }
 
 .proximo:hover {
-  transform: translateY(-4px);
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-5px);
+  border-color: rgba(255, 211, 154, 0.62);
+  box-shadow:
+    0 30px 64px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
-.proximo span { display: block; color: var(--signal); font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.proximo-etiqueta {
+  position: relative;
+  z-index: 1;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  color: #ffe3b8 !important;
+  font-size: 0.8rem !important;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 
-.proximo strong { display: block; margin: 10px 0 8px; font-family: var(--serif); font-size: 1.45rem; font-weight: 560; }
+.proximo-icono {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #071933;
+  background: linear-gradient(145deg, #ffd39a, #ff8a3d);
+  box-shadow: 0 8px 16px rgba(255, 106, 26, 0.28);
+}
 
-.proximo em { font-style: normal; color: rgba(247, 249, 252, 0.8); }
+.proximo-icono svg { display: block; }
+
+.proximo strong {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin: 14px 0 10px;
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  font-weight: 560;
+  line-height: 1.2;
+}
+
+.proximo em {
+  position: relative;
+  z-index: 1;
+  display: block;
+  font-style: normal;
+  color: rgba(247, 251, 255, 0.86);
+}
 
 .proximo-cta {
+  position: relative;
+  z-index: 1;
   display: inline-flex !important;
   align-items: center;
   gap: 6px;
-  margin-top: 14px;
+  margin-top: 16px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: #fff !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
   font-size: 0.95rem !important;
+  font-weight: 650;
 }
 
 .principal { padding: 28px 0 80px; }
