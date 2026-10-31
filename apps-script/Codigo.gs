@@ -16,7 +16,10 @@
 
 var CLAVE_INICIAL_ADMIN = "CAMBIAR";
 var USUARIO_INICIAL_ADMIN = "admin";
-var HORAS_SESION = 12;
+var HORAS_SESION = 8;
+var HASH_ROUNDS = 2500;
+var MAX_INSCRIPCIONES_POR_MINUTO = 40;
+var MAX_LOGIN_FALLIDOS = 5;
 
 var HEADERS = {
   Usuarios: ["id", "usuario", "clave_hash", "salt", "rol", "evento_id", "nombre", "activo", "creado_en", "whatsapp"],
@@ -38,10 +41,18 @@ function doGet() {
 function doPost(e) {
   try {
     var body = {};
-    if (e && e.postData && e.postData.contents) body = JSON.parse(e.postData.contents);
+    if (e && e.postData && e.postData.contents) {
+      var crudo = String(e.postData.contents || "");
+      if (crudo.length > 6 * 1024 * 1024) return responder({ ok: false, error: "La solicitud es demasiado grande." });
+      body = JSON.parse(crudo);
+    }
     return responder(enrutar(body || {}));
   } catch (error) {
-    return responder({ ok: false, error: error.message || String(error) });
+    var msg = error && error.message ? String(error.message) : "No se pudo completar la solicitud.";
+    if (/Sesión|permiso|intentos|demanda|incorrectos|cupo|DNI|tarifa|organizador|foto|brochure|clave|evento|inscri/i.test(msg)) {
+      return responder({ ok: false, error: msg });
+    }
+    return responder({ ok: false, error: "No se pudo completar la solicitud. Intenta de nuevo." });
   }
 }
 
@@ -303,8 +314,8 @@ function forzarTexto(valor) {
   return s;
 }
 
-function hashClave(clave, salt) {
-  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + "|" + clave, Utilities.Charset.UTF_8);
+function digestHex(texto) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(texto), Utilities.Charset.UTF_8);
   var hex = "";
   for (var i = 0; i < bytes.length; i++) {
     var v = bytes[i] < 0 ? bytes[i] + 256 : bytes[i];
@@ -312,6 +323,29 @@ function hashClave(clave, salt) {
     hex += h.length === 1 ? "0" + h : h;
   }
   return hex;
+}
+
+/** Hash legado (una pasada). Se mantiene para claves ya guardadas. */
+function hashClaveLegacy(clave, salt) {
+  return digestHex(String(salt) + "|" + String(clave));
+}
+
+/** Hash reforzado para claves nuevas. */
+function hashClave(clave, salt) {
+  var cur = String(salt) + "|" + String(clave);
+  var i;
+  for (i = 0; i < HASH_ROUNDS; i++) cur = digestHex(cur + "|" + i);
+  return "v2:" + cur;
+}
+
+function verificarClave(clave, salt, guardado) {
+  guardado = String(guardado || "");
+  if (guardado.indexOf("v2:") === 0) return hashClave(clave, salt) === guardado;
+  return hashClaveLegacy(clave, salt) === guardado;
+}
+
+function hashToken(token) {
+  return digestHex("ses|" + String(token || ""));
 }
 
 function nuevoId(prefijo) {
@@ -618,10 +652,42 @@ function eventoPublico(body) {
   return { ok: false, error: "No encontramos ese evento." };
 }
 
+function verificarLimiteInscripcion() {
+  var props = PropertiesService.getScriptProperties();
+  var clave = "ins_rl_" + Math.floor(Date.now() / 60000);
+  var n = Number(props.getProperty(clave) || "0");
+  if (n >= MAX_INSCRIPCIONES_POR_MINUTO) {
+    throw new Error("Hay mucha demanda ahora. Intenta de nuevo en un minuto.");
+  }
+  props.setProperty(clave, String(n + 1));
+}
+
+function organizadorActivoPorUsuario(eventoId, usuarioRef) {
+  var orgs = organizadoresDe(eventoId);
+  var ref = String(usuarioRef || "").toLowerCase();
+  var o;
+  for (o = 0; o < orgs.length; o++) {
+    if (!esSi(orgs[o].activo)) continue;
+    if (String(orgs[o].usuario || "").toLowerCase() === ref) return orgs[o];
+  }
+  return null;
+}
+
+function organizadoresActivosDe(eventoId) {
+  var orgs = organizadoresDe(eventoId);
+  var activos = [];
+  var o;
+  for (o = 0; o < orgs.length; o++) {
+    if (esSi(orgs[o].activo)) activos.push(orgs[o]);
+  }
+  return activos;
+}
+
 function inscribir(body) {
   var mensaje = validarInscripcion(body);
   if (mensaje) return { ok: false, error: mensaje };
   return conBloqueo(function () {
+    verificarLimiteInscripcion();
     var filas = leerObjetos("Eventos");
     var crudo = null;
     for (var i = 0; i < filas.length; i++) {
@@ -650,14 +716,13 @@ function inscribir(body) {
     if (!coincide) return { ok: false, error: "Elige una tarifa de este evento." };
     var ref = limpio(body.organizadorUsuario || body.ref).toLowerCase();
     var orgId = "";
+    var activos = organizadoresActivosDe(evento.id);
     if (ref) {
-      var orgs = organizadoresDe(evento.id);
-      var hallado = null;
-      for (var o = 0; o < orgs.length; o++) {
-        if (String(orgs[o].usuario || "").toLowerCase() === ref && esSi(orgs[o].activo)) hallado = orgs[o];
-      }
+      var hallado = organizadorActivoPorUsuario(evento.id, ref);
       if (!hallado) return { ok: false, error: "Ese enlace de organizador no es válido para este evento." };
       orgId = String(hallado.id);
+    } else if (activos.length === 1) {
+      orgId = String(activos[0].id);
     }
     var folio = siguienteFolio();
     var row = {
@@ -708,7 +773,7 @@ function login(body) {
   for (var i = 0; i < lista.length; i++) {
     if (String(lista[i].usuario).toLowerCase() === usuario) encontrado = lista[i];
   }
-  var valido = encontrado && esSi(encontrado.activo) && hashClave(clave, String(encontrado.salt)) === String(encontrado.clave_hash);
+  var valido = encontrado && esSi(encontrado.activo) && verificarClave(clave, String(encontrado.salt), String(encontrado.clave_hash));
   if (!valido) {
     registrarFallo(usuario);
     return { ok: false, error: "Usuario o clave incorrectos." };
@@ -719,10 +784,16 @@ function login(body) {
     var sh = hoja("Sesiones");
     limpiarSesiones(sh);
     agregarFila(sh, HEADERS.Sesiones, {
-      token: token,
+      token: hashToken(token),
       usuario_id: String(encontrado.id),
       expira: String(Date.now() + HORAS_SESION * 60 * 60 * 1000)
     });
+    if (String(encontrado.clave_hash || "").indexOf("v2:") !== 0) {
+      var filaUsr = filaPorId(hoja("Usuarios"), encontrado.id);
+      if (filaUsr > 0) {
+        hoja("Usuarios").getRange(filaUsr, columna("Usuarios", "clave_hash")).setValue(hashClave(clave, String(encontrado.salt)));
+      }
+    }
     var cuenta = normalizarUsuario(encontrado);
     return {
       ok: true,
@@ -743,9 +814,11 @@ function salir(body) {
     var sh = hoja("Sesiones");
     var last = sh.getLastRow();
     if (last < 2) return { ok: true };
+    var buscado = hashToken(body.token);
     var values = sh.getRange(2, 1, last - 1, 1).getValues();
     for (var i = values.length - 1; i >= 0; i--) {
-      if (String(values[i][0]) === String(body.token)) sh.deleteRow(i + 2);
+      var guardado = String(values[i][0]);
+      if (guardado === buscado || guardado === String(body.token)) sh.deleteRow(i + 2);
     }
     return { ok: true };
   });
@@ -769,10 +842,12 @@ function usuarioDeToken(token) {
   if (!token) return null;
   token = String(token);
   if (token.length < 20 || token.length > 120) return null;
+  var hashed = hashToken(token);
   var sesiones = leerObjetos("Sesiones");
   var usuarioId = "";
   for (var i = 0; i < sesiones.length; i++) {
-    if (String(sesiones[i].token) !== token) continue;
+    var guardado = String(sesiones[i].token || "");
+    if (guardado !== hashed && guardado !== token) continue;
     if (Number(sesiones[i].expira) < Date.now()) return null;
     usuarioId = String(sesiones[i].usuario_id);
     break;
@@ -804,7 +879,7 @@ function limpiarSesiones(sh) {
 function verificarIntentos(usuario) {
   var data = leerIntentos(usuario);
   if (!data.t || Date.now() - Number(data.t) > 15 * 60 * 1000) return;
-  if (Number(data.n) >= 8) throw new Error("Demasiados intentos. Espera 15 minutos.");
+  if (Number(data.n) >= MAX_LOGIN_FALLIDOS) throw new Error("Demasiados intentos. Espera 15 minutos.");
 }
 
 function registrarFallo(usuario) {
@@ -851,18 +926,32 @@ function detalleAdmin(body) {
   };
 }
 
+function esInscripcionMia(item, usuario) {
+  if (!item || !usuario) return false;
+  if (String(item.organizadorId || "") && String(item.organizadorId) === String(usuario.id)) return true;
+  if (String(item.organizadorUsuario || "").toLowerCase() === String(usuario.usuario || "").toLowerCase()) return true;
+  return false;
+}
+
 function miPanel(body) {
   var usuario = exigir(body, ["organizador"]);
-  if (!usuario.eventoId) return { ok: true, evento: null, inscripciones: [], misInscripciones: [], totales: { inscritos: 0, pagados: 0, mios: 0 } };
+  if (!usuario.eventoId) {
+    return { ok: true, evento: null, inscripciones: [], misInscripciones: [], totales: { inscritos: 0, pagados: 0, mios: 0, sinAtribucion: 0 } };
+  }
   var evento = buscarEvento(usuario.eventoId);
-  if (!evento) return { ok: true, evento: null, inscripciones: [], misInscripciones: [], totales: { inscritos: 0, pagados: 0, mios: 0 } };
+  if (!evento) {
+    return { ok: true, evento: null, inscripciones: [], misInscripciones: [], totales: { inscritos: 0, pagados: 0, mios: 0, sinAtribucion: 0 } };
+  }
   var todas = inscripcionesDe(evento.id);
   var mias = [];
-  for (var i = 0; i < todas.length; i++) {
-    if (String(todas[i].organizadorId) === String(usuario.id)) mias.push(todas[i]);
-  }
+  var sinAtribucion = 0;
   var pagados = 0;
-  for (var p = 0; p < todas.length; p++) if (todas[p].pagado) pagados++;
+  var i;
+  for (i = 0; i < todas.length; i++) {
+    if (todas[i].pagado) pagados++;
+    if (!todas[i].organizadorId) sinAtribucion++;
+    if (esInscripcionMia(todas[i], usuario)) mias.push(todas[i]);
+  }
   return {
     ok: true,
     evento: jsonEvento(evento, extraDe(evento, conteos(), true)),
@@ -871,7 +960,8 @@ function miPanel(body) {
     totales: {
       inscritos: todas.length,
       pagados: pagados,
-      mios: mias.length
+      mios: mias.length,
+      sinAtribucion: sinAtribucion
     }
   };
 }
@@ -1001,9 +1091,9 @@ function cambiarClave(body) {
   var actual = String(body.actual || "");
   var nueva = String(body.nueva || "");
   if (!actual) return { ok: false, error: "Escribe tu clave actual." };
-  if (nueva.length < 6) return { ok: false, error: "La nueva clave debe tener al menos 6 caracteres." };
+  if (nueva.length < 8) return { ok: false, error: "La nueva clave debe tener al menos 8 caracteres." };
   if (nueva.length > 80) return { ok: false, error: "La nueva clave es demasiado larga." };
-  if (hashClave(actual, usuario.salt) !== usuario.claveHash) return { ok: false, error: "La clave actual no coincide." };
+  if (!verificarClave(actual, usuario.salt, usuario.claveHash)) return { ok: false, error: "La clave actual no coincide." };
   return conBloqueo(function () {
     var sh = hoja("Usuarios");
     var fila = filaPorId(sh, usuario.id);
@@ -1039,10 +1129,23 @@ function publicarImagen(datos) {
   var crudo = String(datos || "").replace(/\s/g, "");
   var coma = crudo.indexOf(",");
   if (coma !== -1) crudo = crudo.substring(coma + 1);
-  if (crudo.indexOf("/9j/") !== 0) throw new Error("La foto debe ser JPG, PNG o WEBP.");
+  var mime = "image/jpeg";
+  var ext = "jpg";
+  if (crudo.indexOf("/9j/") === 0) {
+    mime = "image/jpeg";
+    ext = "jpg";
+  } else if (crudo.indexOf("iVBOR") === 0) {
+    mime = "image/png";
+    ext = "png";
+  } else if (crudo.indexOf("UklGR") === 0) {
+    mime = "image/webp";
+    ext = "webp";
+  } else {
+    throw new Error("La foto debe ser JPG, PNG o WEBP.");
+  }
   if (crudo.length < 100 || crudo.length > 1800000) throw new Error("La foto es demasiado pesada. Elige una más liviana.");
   var bytes = Utilities.base64Decode(crudo);
-  var archivo = carpetaImagenes().createFile(Utilities.newBlob(bytes, "image/jpeg", "evento-" + Utilities.getUuid() + ".jpg"));
+  var archivo = carpetaImagenes().createFile(Utilities.newBlob(bytes, mime, "evento-" + Utilities.getUuid() + "." + ext));
   return "drive:" + archivo.getId();
 }
 
@@ -1065,6 +1168,7 @@ function brochurePublico(body) {
   }
   if (!crudo) return { ok: false, error: "No encontramos ese evento." };
   var evento = normalizarEvento(crudo);
+  if (!evento.activo) return { ok: false, error: "Este evento no está disponible." };
   if (!evento.brochure) return { ok: false, error: "Este evento no tiene brochure." };
   if (evento.brochure.indexOf("drive:") === 0) {
     try {
@@ -1109,7 +1213,7 @@ function guardarEvento(body) {
       if (ocupado && String(ocupado.evento_id || "") && (!actual || String(ocupado.evento_id) !== actual.id)) {
         return { ok: false, error: "El usuario " + org.usuario + " ya pertenece a otro evento." };
       }
-      if (!ocupado && !org.clave) return { ok: false, error: "La clave de " + org.usuario + " debe tener al menos 6 caracteres." };
+      if (!ocupado && (!org.clave || String(org.clave).length < 8)) return { ok: false, error: "La clave de " + org.usuario + " debe tener al menos 8 caracteres." };
     }
     if (body.imagenArchivo) entrada.imagen = publicarImagen(body.imagenArchivo);
     if (body.quitarBrochure) entrada.brochure = "";
@@ -1324,10 +1428,10 @@ function validarEvento(datos, opciones) {
   if (orgsLimpios.lista.length > 10) return "Puedes agregar hasta 10 organizadores.";
   for (var i = 0; i < orgsLimpios.lista.length; i++) {
     var org = orgsLimpios.lista[i];
-    if ((!org.existente || opciones.exigirOrganizador) && org.clave.length < 6) {
-      return "La clave de " + org.usuario + " debe tener al menos 6 caracteres.";
+    if ((!org.existente || opciones.exigirOrganizador) && org.clave.length < 8) {
+      return "La clave de " + org.usuario + " debe tener al menos 8 caracteres.";
     }
-    if (org.clave && org.clave.length < 6) return "La nueva clave de " + org.usuario + " debe tener al menos 6 caracteres.";
+    if (org.clave && org.clave.length < 8) return "La nueva clave de " + org.usuario + " debe tener al menos 8 caracteres.";
     if (org.clave.length > 80) return "La clave de " + org.usuario + " es demasiado larga.";
   }
   return "";

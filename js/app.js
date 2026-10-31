@@ -5,7 +5,7 @@
     tipo: "Todos",
     filtroPago: "todos",
     buscaInscritos: "",
-    vistaInscritos: "mios",
+    vistaInscritos: "todos",
     rutaClave: "",
     eventos: [],
     listaInscritos: [],
@@ -241,7 +241,7 @@
       usuarioCampo +
       '<label class="campo"><span>Nombre</span><input name="orgNombre" maxlength="80" value="' + escapar(org.nombre || "") + '" placeholder="Nombre completo"></label>' +
       '<label class="campo"><span>WhatsApp</span><input name="orgWhatsapp" inputmode="numeric" maxlength="9" pattern="[0-9]{9}" placeholder="987654321" value="' + escapar(org.whatsapp || "") + '"></label>' +
-      '<label class="campo"><span>' + (existente ? "Nueva clave (opcional)" : "Clave") + '</span><input name="orgClave" type="password" minlength="6" autocomplete="new-password" placeholder="' + (existente ? "Sin cambio" : "Mínimo 6") + '"></label>' +
+      '<label class="campo"><span>' + (existente ? "Nueva clave (opcional)" : "Clave") + '</span><input name="orgClave" type="password" minlength="8" autocomplete="new-password" placeholder="' + (existente ? "Sin cambio" : "Mínimo 8") + '"></label>' +
       '<button type="button" class="btn btn-peligro" data-accion="quitar-org">Quitar</button></div>';
   }
 
@@ -800,7 +800,7 @@
   function pintarCuerpoTabla() {
     var cuerpo = document.getElementById("cuerpo-inscritos");
     var mostrarOrg = !!(estado.sesion && estado.sesion.rol === "admin") ||
-      (estado.sesion && estado.sesion.rol === "organizador" && estado.vistaInscritos === "todos");
+      (estado.sesion && estado.sesion.rol === "organizador" && estado.vistaInscritos !== "mios");
     if (cuerpo) cuerpo.innerHTML = htmlFilasInscritos(mostrarOrg);
     document.querySelectorAll("[data-accion='filtro-pago']").forEach(function (boton) {
       boton.setAttribute("aria-pressed", boton.dataset.pago === estado.filtroPago ? "true" : "false");
@@ -821,17 +821,26 @@
     var statsExtra = "";
     var enlaceMio = "";
     if (esOrg && opciones.totales) {
-      vistas = '<div class="chips" style="margin:10px 0 0"><button type="button" class="chip" data-accion="vista-inscritos" data-vista="mios" aria-pressed="' + (estado.vistaInscritos === "mios" ? "true" : "false") + '">Mis inscritos</button><button type="button" class="chip" data-accion="vista-inscritos" data-vista="todos" aria-pressed="' + (estado.vistaInscritos === "todos" ? "true" : "false") + '">Total del evento</button></div>';
-      statsExtra = '<article class="stat"><span>Total del evento</span><strong>' + (opciones.totales.inscritos || 0) + '</strong></article><article class="stat"><span>Mis inscritos</span><strong>' + (opciones.totales.mios || 0) + "</strong></article>";
+      var sinAttr = Number(opciones.totales.sinAtribucion || 0);
+      vistas = '<div class="chips" style="margin:10px 0 0">' +
+        '<button type="button" class="chip" data-accion="vista-inscritos" data-vista="todos" aria-pressed="' + (estado.vistaInscritos === "todos" ? "true" : "false") + '">Total del evento</button>' +
+        '<button type="button" class="chip" data-accion="vista-inscritos" data-vista="mios" aria-pressed="' + (estado.vistaInscritos === "mios" ? "true" : "false") + '">Mis inscritos</button>' +
+        (sinAttr > 0
+          ? '<button type="button" class="chip" data-accion="vista-inscritos" data-vista="sin" aria-pressed="' + (estado.vistaInscritos === "sin" ? "true" : "false") + '">Sin organizador (' + sinAttr + ")</button>"
+          : "") +
+        "</div>";
+      statsExtra = '<article class="stat"><span>Total del evento</span><strong>' + (opciones.totales.inscritos || 0) + '</strong></article>' +
+        '<article class="stat"><span>Mis inscritos</span><strong>' + (opciones.totales.mios || 0) + "</strong></article>" +
+        (sinAttr > 0 ? '<article class="stat"><span>Sin organizador</span><strong>' + sinAttr + "</strong></article>" : "");
       if (estado.sesion.usuario && evento.id) {
         enlaceMio = '<div class="enlace-card">' +
           "<p>Comparte tu enlace para que las nuevas inscripciones cuenten como tuyas.</p>" +
           '<button type="button" class="btn btn-primario" data-accion="copiar-enlace" data-enlace="' + escapar(enlaceOrganizador(evento.id, estado.sesion.usuario)) + '">Copiar mi enlace</button>' +
           "</div>";
       }
-      if (Number(opciones.totales.inscritos || 0) > 0 && Number(opciones.totales.mios || 0) === 0) {
+      if (sinAttr > 0) {
         enlaceMio += '<div class="enlace-card enlace-card-aviso">' +
-          "<p>Hay personas inscritas que aún no están en tu lista. Puedes sumarlas una sola vez.</p>" +
+          "<p>Hay " + sinAttr + " inscripción(es) sin organizador. Puedes sumarlas a tu lista.</p>" +
           '<button type="button" class="btn btn-secundario" data-accion="reclamar-inscritos">Sumar a mi lista</button>' +
           "</div>";
       }
@@ -841,7 +850,7 @@
       "<th>WhatsApp</th><th>Pago</th><th>Acciones</th>";
     return '<div class="panel-premium">' + (opciones.volver || "") +
       '<div class="encabezado-pagina"><div class="pills"><span class="pill ' + (evento.activo ? "pill-ok" : "pill-off") + '">' + (evento.activo ? "Inscripciones abiertas" : "Inscripciones pausadas") + '</span></div><h1>' + escapar(evento.titulo) + "</h1><p>" + escapar(evento.organizacion) + " · " + escapar(formatoFecha(evento.fecha)) + (esOrg && estado.sesion.usuario ? " · Tú: " + escapar(estado.sesion.usuario) : "") + "</p>" + vistas + "</div>" +
-      '<section class="stats">' + (statsExtra || "") + '<article class="stat"><span>' + (esOrg && estado.vistaInscritos === "mios" ? "En esta lista" : "Inscritos") + '</span><strong>' + cifras.total + '</strong></article><article class="stat"><span>Pagaron</span><strong>' + cifras.pagados + '</strong></article><article class="stat"><span>Pendientes</span><strong>' + cifras.pendientes + '</strong></article><article class="stat stat-tarifas"><span>Por tarifa</span><strong>' + escapar(cifras.porTarifa) + "</strong></article></section>" +
+      '<section class="stats">' + (statsExtra || "") + '<article class="stat"><span>' + (esOrg && estado.vistaInscritos !== "todos" ? "En esta lista" : "Inscritos") + '</span><strong>' + cifras.total + '</strong></article><article class="stat"><span>Pagaron</span><strong>' + cifras.pagados + '</strong></article><article class="stat"><span>Pendientes</span><strong>' + cifras.pendientes + '</strong></article><article class="stat stat-tarifas"><span>Por tarifa</span><strong>' + escapar(cifras.porTarifa) + "</strong></article></section>" +
       enlaceMio +
       (!evento.activo && esOrg ? '<p class="nota">El administrador pausó las inscripciones. Igual puedes revisar la lista y actualizar los pagos.</p>' : "") +
       '<div class="barra-lista"><input id="buscar-inscritos" class="buscador" style="max-width:360px" type="search" placeholder="Buscar nombre, DNI o correo" value="' + escapar(estado.buscaInscritos) + '" aria-label="Buscar inscritos"><div class="acciones">' + filtros + '<button type="button" class="btn btn-secundario" data-accion="excel">Descargar Excel</button></div></div>' +
@@ -870,20 +879,34 @@
       return marco('<div class="vacio"><h1>Tu usuario no tiene un evento</h1><p>Pide al administrador que te asigne el evento otra vez.</p></div>');
     }
     estado.listaTodas = panel.inscripciones || [];
-    var mias = panel.misInscripciones || estado.listaTodas.filter(function (item) {
-      return String(item.organizadorUsuario || "").toLowerCase() === String(estado.sesion.usuario || "").toLowerCase();
-    });
-    var lista = estado.vistaInscritos === "todos" ? estado.listaTodas : mias;
+    var mias = (panel.misInscripciones || []).slice();
+    if (!mias.length) {
+      mias = estado.listaTodas.filter(function (item) {
+        return String(item.organizadorId || "") === String(estado.sesion.id || "") ||
+          String(item.organizadorUsuario || "").toLowerCase() === String(estado.sesion.usuario || "").toLowerCase();
+      });
+    }
+    var sinOrg = estado.listaTodas.filter(function (item) { return !item.organizadorId; });
+    var lista = estado.listaTodas;
+    if (estado.vistaInscritos === "mios") lista = mias;
+    else if (estado.vistaInscritos === "sin") lista = sinOrg;
+    var totales = panel.totales || {
+      inscritos: estado.listaTodas.length,
+      mios: mias.length,
+      pagados: 0,
+      sinAtribucion: sinOrg.length
+    };
+    if (totales.sinAtribucion == null) totales.sinAtribucion = sinOrg.length;
     return marco(htmlPanelInscritos(panel.evento, lista, {
-      totales: panel.totales || { inscritos: estado.listaTodas.length, mios: mias.length, pagados: 0 },
-      mostrarOrg: estado.vistaInscritos === "todos"
+      totales: totales,
+      mostrarOrg: estado.vistaInscritos !== "mios"
     }));
   }
 
   function vistaCuenta() {
     if (!estado.sesion) return vistaEntrar();
     document.title = "Contraseña · " + nombreSitio();
-    return marco('<div class="bloque login-caja"><h1>Cambiar contraseña</h1><p class="nota">Sesión de ' + escapar(estado.sesion.usuario) + '.</p><form id="form-clave"><div class="campo" style="margin-top:12px"><span>Clave actual</span><input name="actual" type="password" required autocomplete="current-password"></div><div class="campo" style="margin-top:10px"><span>Nueva clave</span><input name="nueva" type="password" required minlength="6" autocomplete="new-password"></div><button class="btn btn-primario" style="margin-top:14px" type="submit">Guardar clave</button></form></div>');
+    return marco('<div class="bloque login-caja"><h1>Cambiar contraseña</h1><p class="nota">Sesión de ' + escapar(estado.sesion.usuario) + '.</p><form id="form-clave"><div class="campo" style="margin-top:12px"><span>Clave actual</span><input name="actual" type="password" required autocomplete="current-password"></div><div class="campo" style="margin-top:10px"><span>Nueva clave</span><input name="nueva" type="password" required minlength="8" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div><button class="btn btn-primario" style="margin-top:14px" type="submit">Guardar clave</button></form></div>');
   }
 
   function exigirRol(rol) {
@@ -917,7 +940,7 @@
       estado.rutaClave = ruta.clave;
       estado.buscaInscritos = "";
       estado.filtroPago = "todos";
-      if (ruta.nombre !== "panel") estado.vistaInscritos = "mios";
+      if (ruta.nombre !== "panel") estado.vistaInscritos = "todos";
       if (ruta.nombre !== "evento") estado.refOrganizador = "";
       var app = document.getElementById("app");
       if (app && !app.querySelector(".esqueleto")) {

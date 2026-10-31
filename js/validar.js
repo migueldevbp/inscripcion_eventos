@@ -96,11 +96,11 @@
       if (!/^\d{9}$/.test(utiles[j].whatsapp)) return "Cada organizador necesita un WhatsApp de 9 dígitos.";
       if (vistos[utiles[j].usuario]) return "Hay dos organizadores con el mismo usuario.";
       vistos[utiles[j].usuario] = true;
-      if ((!utiles[j].existente || opciones.exigirOrganizador) && utiles[j].clave.length < 6) {
-        return "La clave de " + utiles[j].usuario + " debe tener al menos 6 caracteres.";
+      if ((!utiles[j].existente || opciones.exigirOrganizador) && utiles[j].clave.length < 8) {
+        return "La clave de " + utiles[j].usuario + " debe tener al menos 8 caracteres.";
       }
-      if (utiles[j].clave && utiles[j].clave.length < 6) {
-        return "La nueva clave de " + utiles[j].usuario + " debe tener al menos 6 caracteres.";
+      if (utiles[j].clave && utiles[j].clave.length < 8) {
+        return "La nueva clave de " + utiles[j].usuario + " debe tener al menos 8 caracteres.";
       }
       if (utiles[j].clave.length > 80) return "La clave de " + utiles[j].usuario + " es demasiado larga.";
     }
@@ -160,7 +160,7 @@
 
   function claveNueva(actual, nueva) {
     if (!String(actual || "")) return "Escribe tu clave actual.";
-    if (String(nueva || "").length < 6) return "La nueva clave debe tener al menos 6 caracteres.";
+    if (String(nueva || "").length < 8) return "La nueva clave debe tener al menos 8 caracteres.";
     if (String(nueva || "").length > 80) return "La nueva clave es demasiado larga.";
     return "";
   }

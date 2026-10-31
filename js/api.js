@@ -444,11 +444,14 @@
         }
         var ref = window.Validar.limpio(datos.organizadorUsuario || datos.ref).toLowerCase();
         var orgRef = null;
+        var activos = data.usuarios.filter(function (item) {
+          return item.rol === "organizador" && item.eventoId === evento.id && item.activo;
+        });
         if (ref) {
-          orgRef = data.usuarios.find(function (item) {
-            return item.rol === "organizador" && item.eventoId === evento.id && item.activo && item.usuario === ref;
-          });
+          orgRef = activos.find(function (item) { return item.usuario === ref; });
           if (!orgRef) throw new Error("Ese enlace de organizador no es válido para este evento.");
+        } else if (activos.length === 1) {
+          orgRef = activos[0];
         }
         data.folio = (data.folio || 0) + 1;
         var folio = String(data.folio);
@@ -628,13 +631,16 @@
         var usuario = exigir(["organizador"]);
         var data = cargar();
         var evento = data.eventos.find(function (item) { return item.id === usuario.eventoId; });
-        if (!evento) return { evento: null, inscripciones: [], misInscripciones: [], totales: { inscritos: 0, pagados: 0, mios: 0 } };
+        if (!evento) {
+          return { evento: null, inscripciones: [], misInscripciones: [], totales: { inscritos: 0, pagados: 0, mios: 0, sinAtribucion: 0 } };
+        }
         var todas = data.inscripciones.filter(function (item) { return item.eventoId === evento.id; }).sort(function (a, b) {
           return String(b.fecha).localeCompare(String(a.fecha));
         });
         var mias = todas.filter(function (item) {
           return String(item.organizadorId) === String(usuario.id) || String(item.organizadorUsuario || "").toLowerCase() === String(usuario.usuario || "").toLowerCase();
         });
+        var sinAtribucion = todas.filter(function (item) { return !item.organizadorId; }).length;
         return {
           evento: completo(evento, data),
           inscripciones: todas,
@@ -642,7 +648,8 @@
           totales: {
             inscritos: todas.length,
             pagados: todas.filter(function (item) { return item.pagado; }).length,
-            mios: mias.length
+            mios: mias.length,
+            sinAtribucion: sinAtribucion
           }
         };
       },
