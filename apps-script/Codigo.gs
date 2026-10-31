@@ -717,12 +717,18 @@ function inscribir(body) {
     var ref = limpio(body.organizadorUsuario || body.ref).toLowerCase();
     var orgId = "";
     var activos = organizadoresActivosDe(evento.id);
-    if (ref) {
-      var hallado = organizadorActivoPorUsuario(evento.id, ref);
-      if (!hallado) return { ok: false, error: "Ese enlace de organizador no es válido para este evento." };
-      orgId = String(hallado.id);
-    } else if (activos.length === 1) {
-      orgId = String(activos[0].id);
+    if (activos.length) {
+      if (!ref) {
+        if (activos.length === 1) {
+          orgId = String(activos[0].id);
+        } else {
+          return { ok: false, error: "Elige qué organizador te atenderá." };
+        }
+      } else {
+        var hallado = organizadorActivoPorUsuario(evento.id, ref);
+        if (!hallado) return { ok: false, error: "Ese enlace de organizador no es válido para este evento." };
+        orgId = String(hallado.id);
+      }
     }
     var folio = siguienteFolio();
     var row = {

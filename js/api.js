@@ -447,11 +447,14 @@
         var activos = data.usuarios.filter(function (item) {
           return item.rol === "organizador" && item.eventoId === evento.id && item.activo;
         });
-        if (ref) {
-          orgRef = activos.find(function (item) { return item.usuario === ref; });
-          if (!orgRef) throw new Error("Ese enlace de organizador no es válido para este evento.");
-        } else if (activos.length === 1) {
-          orgRef = activos[0];
+        if (activos.length) {
+          if (!ref) {
+            if (activos.length === 1) orgRef = activos[0];
+            else throw new Error("Elige qué organizador te atenderá.");
+          } else {
+            orgRef = activos.find(function (item) { return item.usuario === ref; });
+            if (!orgRef) throw new Error("Ese enlace de organizador no es válido para este evento.");
+          }
         }
         data.folio = (data.folio || 0) + 1;
         var folio = String(data.folio);

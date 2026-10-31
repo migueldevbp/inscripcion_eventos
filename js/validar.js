@@ -107,7 +107,8 @@
     return "";
   }
 
-  function inscripcion(datos) {
+  function inscripcion(datos, opciones) {
+    opciones = opciones || {};
     if (limpio(datos.nombres).length < 2) return "Escribe tus nombres.";
     if (limpio(datos.nombres).length > 80) return "Los nombres son demasiado largos.";
     if (limpio(datos.apellidos).length < 2) return "Escribe tus apellidos.";
@@ -116,6 +117,9 @@
     if (!correoValido(datos.correo)) return "Escribe un correo real, con arroba (@). Ahí llegará tu certificado.";
     if (limpio(datos.correo).length > 120) return "El correo es demasiado largo.";
     if (limpio(datos.categoria).length < 2 || limpio(datos.categoria).length > 40) return "Elige una tarifa.";
+    if (opciones.exigirOrganizador && !limpio(datos.organizadorUsuario)) {
+      return "Elige qué organizador te atenderá.";
+    }
     var telefono = soloDigitos(datos.whatsapp);
     if (!/^\d{9}$/.test(telefono)) return "El WhatsApp debe tener 9 números, sin el código de país.";
     return "";

@@ -643,9 +643,35 @@
     } else {
       var notaCupo = "Sin límite de cupo.";
       if (quedan != null) notaCupo = muestraConteo(evento) ? quedan + " cupos libres." : "Inscripciones abiertas.";
-      ficha += "<h2>Inscribirme</h2><p class=\"nota\">" + notaCupo + (estado.refOrganizador ? " Inscripción vinculada a " + escapar(estado.refOrganizador) + "." : "") + "</p>" +
+      var orgRef = estado.refOrganizador
+        ? orgsPublicos.find(function (item) {
+            return String(item.usuario || "").toLowerCase() === String(estado.refOrganizador).toLowerCase();
+          })
+        : null;
+      var bloqueOrganizador = "";
+      if (orgsPublicos.length) {
+        if (orgRef || estado.refOrganizador) {
+          bloqueOrganizador =
+            '<input type="hidden" name="organizadorUsuario" value="' + escapar((orgRef && orgRef.usuario) || estado.refOrganizador) + '">' +
+            '<p class="nota" style="margin-top:12px">Te atenderá: <strong>' + escapar((orgRef && (orgRef.nombre || orgRef.usuario)) || estado.refOrganizador) + "</strong>. Luego podrás escribirle por WhatsApp para el pago.</p>";
+        } else {
+          bloqueOrganizador =
+            '<div class="campo" style="margin-top:12px"><span>¿Quién deseas que sea tu organizador?</span>' +
+            '<p class="nota" style="margin:4px 0 8px">Elige a quién escribirás por WhatsApp para coordinar el pago.</p>' +
+            '<div class="opciones">' +
+            orgsPublicos.map(function (org, idx) {
+              return '<label class="opcion"><input type="radio" name="organizadorUsuario" value="' + escapar(org.usuario) + '"' +
+                (orgsPublicos.length === 1 || idx === 0 ? " required" : "") +
+                (orgsPublicos.length === 1 ? " checked" : "") +
+                "><span>" + escapar(org.nombre || org.usuario) +
+                (org.whatsapp ? "<small>WhatsApp " + escapar(org.whatsapp) + "</small>" : "") +
+                "</span></label>";
+            }).join("") +
+            "</div></div>";
+        }
+      }
+      ficha += "<h2>Inscribirme</h2><p class=\"nota\">" + notaCupo + "</p>" +
         '<form id="form-inscripcion" method="post" action="#/"><input type="hidden" name="eventoId" value="' + escapar(evento.id) + '">' +
-        '<input type="hidden" name="organizadorUsuario" value="' + escapar(estado.refOrganizador || "") + '">' +
         '<div class="campo" style="margin-top:12px"><span>Nombres</span><input name="nombres" aria-label="Nombres" required maxlength="80" autocomplete="given-name"></div>' +
         '<div class="campo" style="margin-top:10px"><span>Apellidos</span><input name="apellidos" aria-label="Apellidos" required maxlength="80" autocomplete="family-name"></div>' +
         '<div class="campo" style="margin-top:10px"><span>DNI</span><input name="dni" aria-label="DNI" required inputmode="numeric" maxlength="8" pattern="[0-9]{8}" autocomplete="off" placeholder="8 números"></div>' +
@@ -655,6 +681,7 @@
           return '<label class="opcion"><input type="radio" name="categoria" value="' + escapar(tarifa.nombre) + '"><span>' + escapar(tarifa.nombre) + "<small>" + escapar(precioVisible(tarifa.precio)) + "</small></span></label>";
         }).join("") +
         "</div></div>" +
+        bloqueOrganizador +
         '<div class="campo" style="margin-top:10px"><span>WhatsApp</span><input name="whatsapp" aria-label="WhatsApp" required inputmode="numeric" maxlength="9" pattern="[0-9]{9}" placeholder="987654321" autocomplete="tel"></div>' +
         '<button class="btn btn-primario" style="margin-top:14px;width:100%" type="submit">Enviar inscripción</button></form>';
     }
@@ -1082,7 +1109,8 @@
         whatsapp: datos.get("whatsapp"),
         organizadorUsuario: datos.get("organizadorUsuario") || estado.refOrganizador || ""
       };
-      var mensaje = window.Validar.inscripcion(inscripcion);
+      var orgsEvento = organizadoresDe(estado.eventoVista || {});
+      var mensaje = window.Validar.inscripcion(inscripcion, { exigirOrganizador: orgsEvento.length > 0 });
       if (mensaje) { ponerError(form, mensaje); return; }
       var boton = form.querySelector('[type="submit"]');
       boton.disabled = true;
@@ -1093,7 +1121,7 @@
         avisar("Inscripción registrada. Folio " + creada.id + ".");
         mostrarModalPago({
           folio: creada.id,
-          refOrganizador: estado.refOrganizador || "",
+          refOrganizador: inscripcion.organizadorUsuario || estado.refOrganizador || "",
           organizadores: organizadoresDe(eventoOk),
           mensaje: {
             titulo: eventoOk.titulo,
